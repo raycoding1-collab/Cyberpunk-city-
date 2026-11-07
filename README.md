@@ -12,6 +12,14 @@ I didn't build a whole city out of copy-pasted boxes. I picked one street corner
 | ![Back alley](docs/media/alley.jpg) | ![Neural Drift screen](docs/media/screen.jpg) |
 | ![Koi hologram](docs/media/roof.jpg) | ![Maglev line](docs/media/maglev.jpg) |
 
+### The film
+
+[![KOI-TEI · a 45-second cinematic (click to play)](docs/media/film-poster.jpg)](docs/media/koi-tei-cinematic.mp4)
+
+**[▶ Watch the 45-second cinematic](docs/media/koi-tei-cinematic.mp4)** (1280×544, 2.35:1, 24 fps, with sound). It has ten shots: a crane down the neon canyon, an orbit of the rooftop koi, the stacked façade, puddle level on the main street, the ramen counter, the hover car, the back alley, the glitching ad screen, the last maglev and a crane-up reveal. Every frame was rendered from this scene, with no compositing beyond titles.
+
+The score is an original darksynth cue in the classic cyberpunk palette, synthesised from scratch in `tools/soundtrack.py` with no samples. It has CS-80-style brass swells, a 16th-note saw bass, gated-reverb drums and a lead theme, at 120 BPM so the cuts land on the beat. Rain, thunder, the door chime, the hover car, the glitching screen and the maglev's Doppler pass are mixed underneath. To score the film with a track of your own (one you have the rights to), lay it over the rain and sound-effects stem with `--music` (see below).
+
 ---
 
 ## Run it
@@ -110,7 +118,24 @@ src/
   fx/       post · atmosphere · hologram
   ui.js     director: shots, cinematic tour, HUD
   main.js   boot, lighting, environment, quality, loop
-tools/shot.mjs   headless render check (Playwright)
+  film.js   the cinematic: ten camera moves with their own world-time windows
+tools/shot.mjs        headless render check (Playwright)
+tools/film.mjs        deterministic frame-by-frame film render (?record=1)
+tools/soundtrack.py   original synth score + rain/city sound design (numpy, no samples)
+tools/compose.py      titles, captions, fades → H.264 MP4 (ffmpeg)
 ```
+
+### Rendering the film
+
+```bash
+npm run build
+node tools/film.mjs film 0 1079          # 1080 frames → film/f00000.jpg … (can be split across processes)
+python3 tools/soundtrack.py soundtrack.wav
+python3 tools/compose.py film soundtrack.wav koi-tei-cinematic.mp4
+# or with your own music over the rain/SFX stem (soundtrack_fx.wav), starting 12 s into the track:
+python3 tools/compose.py film soundtrack.wav my-cut.mp4 --music track.mp3 --music-start 12
+```
+
+Record mode (`?record=1`) drives every animation from the film clock rather than the wall clock, so the trains, ads, rain and holograms land on the same frame in every run and frames can be rendered in any order or in parallel.
 
 All names, brands, ads and characters in the scene are fictional.
