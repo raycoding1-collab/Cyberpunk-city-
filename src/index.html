@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KOI-TEI BLOCK · Neo-Kabukichō Sector 7</title>
+<meta name="description" content="A hand-crafted real-time 3D cyberpunk city corner: KOI-TEI ramen tower, rain, neon and reflections." />
+<style>
+  :root { --c1: #ff2a6d; --c2: #05d9e8; --c3: #f9c80e; --ink: #d1f7ff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #020206; overflow: hidden; font-family: "JetBrains Mono", "Share Tech Mono", ui-monospace, Menlo, Consolas, monospace; color: var(--ink); }
+  canvas { display: block; }
+  #boot { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 60%, #12051c, #020206 70%); z-index: 20; transition: opacity 1.2s ease; }
+  #boot.done { opacity: 0; pointer-events: none; }
+  #boot .t { font-size: 13px; letter-spacing: .4em; text-transform: uppercase; color: var(--c2); text-shadow: 0 0 12px var(--c2); }
+  #boot .k { font-size: 64px; color: var(--c1); text-shadow: 0 0 24px var(--c1), 0 0 60px #ff2a6d88; margin-bottom: 18px; font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", sans-serif; }
+  #boot .bar { width: 240px; height: 2px; background: #ffffff18; margin-top: 18px; overflow: hidden; }
+  #boot .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--c1), var(--c2)); transition: width .3s; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; transition: opacity .6s; }
+  #hud.hidden { opacity: 0; }
+  .corner { position: absolute; padding: 18px 22px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .tl { top: 0; left: 0; }
+  .tl h1 { margin: 0 0 4px; font-size: 15px; letter-spacing: .32em; color: #fff; text-shadow: 0 0 10px var(--c1); font-weight: 600; }
+  .tl .sub { color: var(--c2); opacity: .85; }
+  .tl .jp { font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", sans-serif; color: var(--c1); letter-spacing: .3em; }
+  .tr { top: 0; right: 0; text-align: right; color: #9bd; }
+  .tr b { color: var(--c3); font-weight: 400; }
+  .bl { bottom: 0; left: 0; right: 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; pointer-events: auto; }
+  .bl button { font: inherit; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); background: #0b0716cc; border: 1px solid #ffffff22; padding: 8px 12px; cursor: pointer; backdrop-filter: blur(6px); transition: all .2s; }
+  .bl button:hover { border-color: var(--c2); color: #fff; box-shadow: 0 0 12px #05d9e855; }
+  .bl button.on { border-color: var(--c1); color: #fff; box-shadow: 0 0 14px #ff2a6d66, inset 0 0 10px #ff2a6d33; }
+  .bl .sep { width: 1px; height: 22px; background: #ffffff22; margin: 0 6px; }
+  .bl .hint { margin-left: auto; color: #8899aa; font-size: 10px; letter-spacing: .12em; }
+  .scan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, #ffffff03 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  #caption { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: #fff; text-shadow: 0 0 8px var(--c2); opacity: 0; transition: opacity .8s; white-space: nowrap; }
+  #caption.show { opacity: .9; }
+  @media (max-width: 720px) { .tr { display: none; } .bl .hint { display: none; } }
+</style>
+</head>
+<body>
+<div id="boot"><div style="text-align:center"><div class="k">鯉亭</div><div class="t">Assembling KOI-TEI block</div><div class="bar"><i id="bootbar"></i></div></div></div>
+<div id="hud">
+  <div class="scan"></div>
+  <div class="corner tl">
+    <h1>KOI-TEI BLOCK</h1>
+    <div class="sub">Neo-Kabukichō · Sector 7 · Gai 3-14</div>
+    <div class="jp">新歌舞伎町 七区 鯉亭ビル</div>
+  </div>
+  <div class="corner tr">
+    <div id="clock">--:--:--</div>
+    <div>Precip <b id="precip">11.4 mm/h</b> · Humidity <b>97%</b></div>
+    <div>Net <b id="net">ONLINE</b> · Grid load <b id="grid">82%</b></div>
+  </div>
+  <div id="caption"></div>
+  <div class="corner bl" id="controls"></div>
+</div>
+<!--BUNDLE-->
+</body>
+</html>

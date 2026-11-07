@@ -1,0 +1,26 @@
+{
+  "name": "cyberpunk-city",
+  "version": "1.0.0",
+  "description": "KOI-TEI Block: a hand-crafted cyberpunk city corner in real-time 3D (Three.js)",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "shot": "node tools/shot.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raycoding1-collab/Cyberpunk-city-.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/raycoding1-collab/Cyberpunk-city-/issues"
+  },
+  "homepage": "https://github.com/raycoding1-collab/Cyberpunk-city-#readme",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "^0.187.0"
+  },
+  "type": "module"
+}
