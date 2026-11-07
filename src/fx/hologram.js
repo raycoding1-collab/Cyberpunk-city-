@@ -108,7 +108,7 @@ export function buildKoiHologram(world, root, base) {
       void main(){ float f = abs(dot(normalize(vN), normalize(vV))); float core = pow(f, 3.0);
         float n = fbm(vec2(vUv.x * 6.0, vUv.y * 3.0 - uTime * 0.6));
         float fade = smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.55, 1.0, vUv.y));
-        gl_FragColor = vec4(uColor * core * fade * (0.2 + n * 0.5) * 0.45, 1.0); }`,
+        gl_FragColor = vec4(uColor * core * fade * (0.2 + n * 0.5) * 0.22, 1.0); }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 0.5, 8.5, 48, 1, true), beamMat);
@@ -144,7 +144,7 @@ export function buildKoiHologram(world, root, base) {
   });
 
   // data sparkles
-  const N = 260;
+  const N = 140;
   const sp = new Float32Array(N * 3), sd = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     const a = Math.random() * Math.PI * 2, r = 0.6 + Math.random() * 4.2;
@@ -157,8 +157,8 @@ export function buildKoiHologram(world, root, base) {
     uniforms: { uTime: U.time },
     vertexShader: /* glsl */`attribute float aSeed; uniform float uTime; varying float vA;
       void main(){ vec3 p = position; float a = uTime * (0.2 + aSeed * 0.3); p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz; p.y += mod(uTime * (0.3 + aSeed), 9.0) - 4.0 * aSeed;
-        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = (1.0 + aSeed * 2.0) * 14.0 / -mv.z * 6.0; vA = 0.5 + 0.5 * sin(uTime * 6.0 + aSeed * 40.0); }`,
-    fragmentShader: /* glsl */`varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c); if (d > 0.5) discard; gl_FragColor = vec4(vec3(0.5, 0.95, 1.0) * 1.3 * vA * pow(1.0 - d * 2.0, 2.0), 1.0); }`,
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = (1.0 + aSeed * 1.5) * 36.0 / -mv.z; vA = 0.5 + 0.5 * sin(uTime * 6.0 + aSeed * 40.0); }`,
+    fragmentShader: /* glsl */`varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c); if (d > 0.5) discard; gl_FragColor = vec4(vec3(0.5, 0.95, 1.0) * 0.55 * vA * pow(1.0 - d * 2.0, 2.0), 1.0); }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
   });
   const pts = new THREE.Points(pg, pm);

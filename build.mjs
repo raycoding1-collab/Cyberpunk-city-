@@ -4,7 +4,7 @@ import * as esbuild from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const watch = process.argv.includes('--watch');
-const OUT = 'docs/index.html';
+const OUT = process.env.OUT || 'docs/index.html';
 
 async function emit(result) {
   const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');

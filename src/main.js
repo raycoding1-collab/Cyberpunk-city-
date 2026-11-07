@@ -14,13 +14,15 @@ import { buildProps } from './world/props.js';
 import { buildAtmosphere } from './fx/atmosphere.js';
 import { createPost } from './fx/post.js';
 import { createDirector, SHOTS } from './ui.js';
+import { filmAt, FILM, FILM_DURATION } from './film.js';
 
 /* =================================================================== */
 /*  KOI-TEI BLOCK — entry point                                         */
 /* =================================================================== */
 
 const params = new URLSearchParams(location.search);
-const CAPTURE = params.has('capture');
+const RECORD = params.has('record');
+const CAPTURE = params.has('capture') || RECORD;
 const bootbar = document.getElementById('bootbar');
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -184,6 +186,35 @@ async function boot() {
   let t = CAPTURE ? +(params.get('t') || 14) : 0;
   let frames = 0, perfAcc = 0, perfN = 0, perfStage = 0;
   renderer.info.autoReset = false;
+  if (RECORD) {
+    // deterministic film renderer: frame i → camera/world state → JPEG
+    const fps = +(params.get('fps') || 24);
+    const st = {};
+    let last = null;
+    window.__film = {
+      fps, frames: Math.round(FILM_DURATION * fps), shots: FILM.map((f) => ({ name: f.name, dur: f.dur })),
+      /** advance the world to frame i (camera + simulation) without drawing; lets a resumed render re-sync */
+      step(i) {
+        filmAt(i / fps, st);
+        const wt = st.world;
+        U.time.value = wt;
+        const dtw = last === null || last.index !== st.index ? 1 / fps : Math.max(0, wt - last.world);
+        for (const u of world.updaters) u(wt, dtw || 1 / fps);
+        camera.position.copy(st.pos);
+        if (camera.fov !== st.fov) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
+        camera.lookAt(st.target);
+        last = { index: st.index, world: wt };
+      },
+      render(i, quality = 0.93) {
+        this.step(i);
+        renderer.info.reset();
+        post.render();
+        return renderer.domElement.toDataURL('image/jpeg', quality);
+      },
+    };
+    window.__captureReady = true;
+    return;
+  }
   const loop = () => {
     renderer.info.reset();
     clock.update();

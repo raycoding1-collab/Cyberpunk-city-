@@ -229,7 +229,7 @@ export function dropletNormalMap() {
 }
 export function realGlass(params = {}, { droplets = false } = {}) {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.03, metalness: 0, transparent: true, premultipliedAlpha: true, depthWrite: false, ...params });
-  if (droplets) { m.normalMap = dropletNormalMap(); m.normalScale = new THREE.Vector2(0.22, 0.22); }
+  if (droplets) { m.normalMap = dropletNormalMap(); m.normalScale = new THREE.Vector2(0.12, 0.12); }
   m.userData.noWeather = true;
   m.userData.noShadow = true;
   m.onBeforeCompile = (sh) => {
