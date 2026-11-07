@@ -5,7 +5,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { U } from '../core/utils.js';
+import { REFLECT } from '../world/ground.js';
 
 /* =================================================================== */
 /*  Lens & film: HDR bloom, anamorphic streaks (horizontal flares on   */
@@ -73,6 +75,45 @@ class AnamorphicPass extends Pass {
   }
 }
 
+/* Ground-truth AO computed from a half-res G-buffer, composited so that
+   neon / emissive pixels are never darkened (AO only removes ambient). */
+class AOPass extends Pass {
+  constructor(scene, camera, w, h) {
+    super();
+    this.scene = scene; this.camera = camera;
+    this.gtao = new GTAOPass(scene, camera, Math.max(1, w >> 1), Math.max(1, h >> 1));
+    this.gtao.output = GTAOPass.OUTPUT.Off;
+    this.gtao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 1.2, scale: 1.25, samples: 16, distanceFallOff: 1.0 });
+    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+    this.strength = 0.9;
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null }, tAO: { value: null }, uS: { value: 0.9 } },
+      vertexShader: VERT,
+      fragmentShader: /* glsl */`uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform float uS; varying vec2 vUv;
+        void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; float ao = texture2D(tAO, vUv).r;
+          float l = max(max(c.r, c.g), c.b);
+          float k = uS * (1.0 - smoothstep(0.6, 2.2, l));
+          gl_FragColor = vec4(c * mix(1.0, ao, k), 1.0); }`,
+    });
+    this.quad = new FullScreenQuad(this.mat);
+  }
+  setSize(w, h) { this.gtao.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); }
+  render(renderer, writeBuffer, readBuffer) {
+    const cam = this.camera;
+    const had1 = cam.layers.isEnabled(1);
+    cam.layers.disable(1);
+    REFLECT.suspend = true;
+    this.gtao.render(renderer, null, null);
+    REFLECT.suspend = false;
+    if (had1) cam.layers.enable(1);
+    this.mat.uniforms.tDiffuse.value = readBuffer.texture;
+    this.mat.uniforms.tAO.value = this.gtao.pdRenderTarget.texture;
+    this.mat.uniforms.uS.value = this.strength;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.quad.render(renderer);
+  }
+}
+
 const GradeShader = {
   uniforms: { tDiffuse: { value: null }, uCA: { value: 0.0035 }, uVig: { value: 0.55 }, uSat: { value: 1.08 } },
   vertexShader: VERT,
@@ -115,12 +156,14 @@ export function createPost(renderer, scene, camera, { samples = 4 } = {}) {
   const composer = new EffectComposer(renderer, rt);
   const renderPass = new RenderPass(scene, camera);
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.62, 0.55, 0.98);
-  const streak = new AnamorphicPass(size.x, size.y, { strength: 0.28, threshold: 2.2 });
+  const streak = new AnamorphicPass(size.x, size.y, { strength: 0.11, threshold: 3.2 });
   const grade = new ShaderPass(GradeShader);
   const output = new OutputPass();
   const film = new ShaderPass(FilmShader);
   film.uniforms.uTime = U.time;
   composer.addPass(renderPass);
+  const ao = new AOPass(scene, camera, size.x, size.y);
+  composer.addPass(ao);
   const nan = new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: VERT,
     fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); bool ok = c.r >= 0.0 && c.g >= 0.0 && c.b >= 0.0 && c.r < 6.0e4 && c.g < 6.0e4 && c.b < 6.0e4; gl_FragColor = ok ? vec4(c.rgb, 1.0) : vec4(0.0, 0.0, 0.0, 1.0); }' });
   composer.addPass(nan);
@@ -130,11 +173,12 @@ export function createPost(renderer, scene, camera, { samples = 4 } = {}) {
   composer.addPass(output);
   composer.addPass(film);
   const api = {
-    composer, bloom, streak, grade, film, nan,
+    composer, bloom, streak, grade, film, nan, ao,
     setSize(w, h, pr) {
       composer.setPixelRatio(pr);
       composer.setSize(w, h);
       streak.setSize(w * pr, h * pr);
+      ao.setSize(Math.round(w * pr), Math.round(h * pr));
       film.uniforms.uRes.value.set(w * pr, h * pr);
     },
     render() { composer.render(); },

@@ -84,6 +84,7 @@ function buildRain(world) {
   });
   mat.uniforms.uTime = U.time;
   const rain = new THREE.LineSegments(geo, mat);
+  rain.name = 'rain';
   rain.frustumCulled = false;
   rain.layers.set(1);
   world.scene.add(rain);
@@ -139,6 +140,7 @@ function buildSplashes(world) {
   });
   mat.uniforms.uTime = U.time;
   const m = new THREE.Mesh(geo, mat);
+  m.name = 'splash';
   m.frustumCulled = false;
   m.layers.set(1);
   world.scene.add(m);
@@ -156,49 +158,55 @@ function buildSteam(world) {
   const per = srcs.map((s) => Math.ceil(s.rate * s.life) + 2);
   const N = per.reduce((a, b) => a + b, 0);
   const pos = new Float32Array(N * 3), data = new Float32Array(N * 4), col = new Float32Array(N * 3);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('aD', new THREE.BufferAttribute(data, 4).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('aC', new THREE.BufferAttribute(col, 3));
+  // camera-facing instanced quads (robust everywhere, unlike point sprites)
+  const base = new THREE.PlaneGeometry(1, 1);
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.index = base.index; geo.setAttribute('position', base.attributes.position); geo.setAttribute('uv', base.attributes.uv);
+  geo.setAttribute('aP', new THREE.InstancedBufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('aD', new THREE.InstancedBufferAttribute(data, 4).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('aC', new THREE.InstancedBufferAttribute(col, 3));
+  geo.instanceCount = N;
   const parts = [];
   let k = 0;
   const r = new RNG(3);
   srcs.forEach((s, si) => {
     const c = new THREE.Color(s.color);
     for (let i = 0; i < per[si]; i++) {
-      parts.push({ s, age: -i / s.rate, life: s.life * r.range(0.8, 1.2), off: new THREE.Vector3(), vel: new THREE.Vector3(), rot: r.range(0, 6.28), k });
+      parts.push({ s, age: -i / s.rate, life: s.life * r.range(0.8, 1.2), off: new THREE.Vector3(), vel: new THREE.Vector3(0, s.rise, 0), rot: r.range(0, 6.28), k });
       col.set([c.r, c.g, c.b], k * 3);
       k++;
     }
   });
   const tex = puffSprite(128, 21);
   const mat = new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { tPuff: { value: tex }, uScale: { value: 820 } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { tPuff: { value: tex } }]),
     vertexShader: /* glsl */`
       #include <common>
       #include <fog_pars_vertex>
-      attribute vec4 aD; attribute vec3 aC; uniform float uScale; varying float vA; varying float vRot; varying vec3 vC;
+      attribute vec3 aP; attribute vec4 aD; attribute vec3 aC; varying float vA; varying vec3 vC; varying vec2 vUv;
       void main(){
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vec4 mvPosition = viewMatrix * vec4(aP, 1.0);
+        float s = sin(aD.z), c = cos(aD.z);
+        vec2 q = vec2(c * position.x - s * position.y, s * position.x + c * position.y) * aD.x;
+        mvPosition.xy += q;
         gl_Position = projectionMatrix * mvPosition;
-        gl_PointSize = aD.x * uScale / max(0.5, -mvPosition.z);
-        vA = aD.y; vRot = aD.z; vC = aC;
+        vA = aD.y; vC = aC; vUv = uv;
         #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */`
       #include <common>
       #include <fog_pars_fragment>
-      uniform sampler2D tPuff; varying float vA; varying float vRot; varying vec3 vC;
+      uniform sampler2D tPuff; varying float vA; varying vec3 vC; varying vec2 vUv;
       void main(){
-        vec2 c = gl_PointCoord - 0.5; float s = sin(vRot), co = cos(vRot);
-        vec2 uv = vec2(co * c.x - s * c.y, s * c.x + co * c.y) + 0.5;
-        float a = texture2D(tPuff, uv).a * vA;
+        float a = texture2D(tPuff, vUv).a * vA;
+        if (a < 0.003) discard;
         gl_FragColor = vec4(vC * 0.62, a * 0.72);
         #include <fog_fragment>
       }`,
     transparent: true, depthWrite: false, fog: true,
   });
-  const pts = new THREE.Points(geo, mat);
+  const pts = new THREE.Mesh(geo, mat);
+  pts.name = 'steam';
   pts.frustumCulled = false;
   world.scene.add(pts);
   let lastT = null;
@@ -225,9 +233,9 @@ function buildSteam(world) {
       const z = s.p.z + p.off.z + p.vel.z * a + Math.cos(a * 0.7 + p.rot) * 0.1 * a;
       pos[p.k * 3] = x; pos[p.k * 3 + 1] = y; pos[p.k * 3 + 2] = z;
       const alpha = p.age < 0 ? 0 : Math.sin(Math.PI * Math.min(1, k)) * Math.min(1, s.max / 4) * (1 - k * 0.5);
-      data[p.k * 4] = s.size * (0.35 + k * 1.6); data[p.k * 4 + 1] = alpha; data[p.k * 4 + 2] = p.rot + a * 0.3;
+      data[p.k * 4] = s.size * (0.35 + k * 1.6) * 0.75; data[p.k * 4 + 1] = alpha; data[p.k * 4 + 2] = p.rot + a * 0.3;
     }
-    geo.attributes.position.needsUpdate = true;
+    geo.attributes.aP.needsUpdate = true;
     geo.attributes.aD.needsUpdate = true;
   });
   return pts;
@@ -242,12 +250,17 @@ function coneMaterial(color, strength = 1) {
     fragmentShader: /* glsl */`uniform float uTime; uniform vec3 uColor; uniform float uS; varying vec3 vN; varying vec3 vV; varying vec2 vUv; varying vec3 vW;
       ${GLSL_NOISE}
       void main(){
-        float f = pow(abs(dot(normalize(vN), normalize(vV))), 1.6);
-        float along = vUv.y;
-        float fade = smoothstep(0.0, 0.25, along) * pow(along, 0.6);
-        float n = 0.65 + 0.7 * fbm(vec2(vW.x * 0.6 + vW.z * 0.6, vW.y * 0.8 + uTime * 0.7));
-        float streak = 0.85 + 0.3 * vnoise(vec2(atan(vN.z, vN.x) * 8.0, vW.y * 2.0 - uTime * 6.0));
-        gl_FragColor = vec4(uColor * f * fade * n * streak * 0.085 * uS, 1.0);
+        vec3 n = vN; float ln = length(n); n = ln > 1e-5 ? n / ln : vec3(0.0, 1.0, 0.0);
+        vec3 v = vV; float lv = length(v); v = lv > 1e-5 ? v / lv : vec3(0.0, 0.0, 1.0);
+        float f = pow(clamp(abs(dot(n, v)), 0.0, 1.0), 1.6);
+        float along = clamp(vUv.y, 0.0, 1.0);
+        float fade = smoothstep(0.0, 0.25, along) * pow(max(along, 1e-4), 0.6);
+        float nz = 0.65 + 0.7 * fbm(vec2(vW.x * 0.6 + vW.z * 0.6, vW.y * 0.8 + uTime * 0.7));
+        float ang = atan(n.z, n.x + 1e-4);
+        float streak = 0.85 + 0.3 * vnoise(vec2(ang * 8.0, vW.y * 2.0 - uTime * 6.0));
+        vec3 col = uColor * f * fade * nz * streak * 0.085 * uS;
+        col = (col.r >= 0.0 && col.g >= 0.0 && col.b >= 0.0) ? min(col, vec3(4.0)) : vec3(0.0);
+        gl_FragColor = vec4(col, 1.0);
       }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });

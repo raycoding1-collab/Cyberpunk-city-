@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { Batch, T, RNG, U, catenaryCurve } from '../core/utils.js';
 import { M, glow } from '../core/materials.js';
 import { drawCanvas } from '../core/textures.js';
-import { lantern } from '../core/prefabs.js';
+import { lantern, swayMaterial } from '../core/prefabs.js';
 import { faceMaterial, JP, JPM, LAT } from './signs.js';
 import { hoverCar } from './vehicles.js';
 import { figure } from './figures.js';
@@ -27,7 +27,7 @@ export function buildProps(world) {
   roadWorks(world, B, root);
   deliveryRobot(world, root);
   ramenAFrame(root);
-  hoverCar(world, root, { x: 3.55, y: 0.48, z: -2.6, ry: Math.PI / 2, color: 0x15102a, accent: 0xff2a6d });
+  hoverCar(world, root, { x: 3.55, y: 0.3, z: -2.6, ry: Math.PI / 2, color: 0x15102a, accent: 0xff2a6d });
   people(world, root);
   B.build(root);
   return root;
@@ -119,7 +119,7 @@ function streetLamps(world, B, root) {
   world.lampHeads.slice(0, 4).forEach((p, i) => {
     const sp = new THREE.SpotLight(0xcfe4ff, 34, 18, 0.95, 0.75, 1.5);
     sp.position.copy(p); sp.target.position.set(p.x, 0, p.z);
-    if (i === 0) { sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.bias = -0.0005; sp.shadow.normalBias = 0.03; sp.shadow.camera.near = 1; sp.shadow.camera.far = 14; }
+    if (i === 0) { sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.bias = -0.0005; sp.shadow.normalBias = 0.03; sp.shadow.camera.near = 1; sp.shadow.camera.far = 14; sp.shadow.radius = 5; sp.shadow.intensity = 0.75; }
     root.add(sp, sp.target);
   });
 }
@@ -177,49 +177,96 @@ function roadWorks(world, B, root) {
 
 /* --------------------------- Delivery robot ---------------------------- */
 function deliveryRobot(world, root) {
+  // six-wheel sidewalk courier: rocker-bogie, treaded tyres, lidded cargo shell
   const g = new THREE.Group();
-  const shell = new THREE.MeshPhysicalMaterial({ color: 0xf2f2ee, roughness: 0.3, clearcoat: 1 });
-  const body = new THREE.Mesh(new RoundedBoxGeometry(0.7, 0.5, 0.55, 3, 0.1), shell); body.position.y = 0.45; body.castShadow = true; g.add(body);
-  const lid = new THREE.Mesh(new RoundedBoxGeometry(0.66, 0.08, 0.5, 2, 0.04), M.plasticBlack); lid.position.y = 0.72; g.add(lid);
-  const flag = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.9), M.plasticBlack); flag.position.set(-0.28, 1.1, -0.2); g.add(flag);
-  const fl = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), glow(0xff8a00, 8)); fl.position.set(-0.28, 1.56, -0.2); g.add(fl);
-  for (const s of [-1, 1]) { const eye = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, 0.05, 4, 8), glow(0x3af2ff, 7)); eye.rotation.z = Math.PI / 2; eye.position.set(0.36, 0.55, s * 0.1); g.add(eye); }
-  const sign = drawCanvas(256, 64, (c) => { c.fillStyle = '#111'; c.fillRect(0, 0, 256, 64); c.fillStyle = '#3af2ff'; c.font = `bold 34px ${LAT}`; c.fillText('KOI-TEI 出前', 12, 44); });
-  const sp = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.12), faceMaterial(sign, 1.4)); sp.position.set(0, 0.5, 0.281); g.add(sp);
-  const sp2 = sp.clone(); sp2.position.z = -0.281; sp2.rotation.y = Math.PI; g.add(sp2);
-  const wheels = [];
-  for (const x of [-0.25, 0, 0.25]) for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 16), M.rubber); w.rotation.x = Math.PI / 2; w.position.set(x, 0.11, s * 0.3); g.add(w); wheels.push(w); }
+  const B = new Batch('robot');
+  const shell = new THREE.MeshPhysicalMaterial({ color: 0xf1f0ea, roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.2 });
+  const chassis = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.6, metalness: 0.2 });
+  const black = new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.08, metalness: 0.2 });
+  const tread = drawCanvas(256, 32, (c) => { c.fillStyle = '#151515'; c.fillRect(0, 0, 256, 32); c.fillStyle = '#2c2c2c'; for (let i = 0; i < 256; i += 12) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 6, 16); c.lineTo(i, 32); c.lineTo(i + 4, 32); c.lineTo(i + 10, 16); c.lineTo(i + 4, 0); c.fill(); } }, { srgb: true });
+  tread.wrapS = THREE.RepeatWrapping;
+  const tyre = new THREE.MeshStandardMaterial({ map: tread, bumpMap: tread, bumpScale: 2, roughness: 0.85 });
+  B.add(new RoundedBoxGeometry(0.72, 0.2, 0.5, 3, 0.05), chassis, T(0, 0.22, 0));
+  B.add(new RoundedBoxGeometry(0.69, 0.25, 0.52, 3, 0.08), shell, T(-0.01, 0.43, 0));
+  B.add(new THREE.BoxGeometry(0.7, 0.008, 0.53), M.metalBlack, T(-0.01, 0.5, 0));            // lid seam
+  B.add(new RoundedBoxGeometry(0.62, 0.05, 0.46, 2, 0.03), shell, T(-0.02, 0.565, 0));        // lid
+  for (const sz of [-0.12, 0.12]) B.add(new THREE.CylinderGeometry(0.012, 0.012, 0.06, 8), M.metalDark, T(-0.33, 0.53, sz, Math.PI / 2, 0, 0)); // hinges
+  // face: glossy black visor with camera, LED eyes, ultrasonic ring
+  B.add(new RoundedBoxGeometry(0.03, 0.13, 0.4, 2, 0.012), black, T(0.355, 0.4, 0));
+  B.add(new THREE.CylinderGeometry(0.022, 0.022, 0.02, 14), M.chrome, T(0.372, 0.43, 0, 0, 0, Math.PI / 2));
+  B.add(new THREE.CircleGeometry(0.014, 12), glow(0x203040, 2), T(0.383, 0.43, 0, 0, Math.PI / 2, 0));
+  for (const sz of [-0.1, 0.1, -0.18, 0.18]) B.add(new THREE.CylinderGeometry(0.012, 0.012, 0.012, 10), M.metalBlack, T(0.36, 0.25, sz, 0, 0, Math.PI / 2));
+  B.add(new THREE.BoxGeometry(0.01, 0.012, 0.3), glow(0xeaf4ff, 5), T(0.362, 0.3, 0));
+  B.add(new THREE.BoxGeometry(0.01, 0.014, 0.3), glow(0xff1830, 3), T(-0.36, 0.33, 0));
+  // rocker-bogie suspension + six wheels
+  for (const sz of [-0.29, 0.29]) {
+    B.add(new THREE.BoxGeometry(0.5, 0.03, 0.025), chassis, T(0.05, 0.15, sz, 0, 0, 0.12));
+    B.add(new THREE.BoxGeometry(0.28, 0.03, 0.025), chassis, T(-0.18, 0.13, sz, 0, 0, -0.18));
+    B.add(new THREE.CylinderGeometry(0.025, 0.025, 0.04, 12), M.steel, T(0.0, 0.16, sz, Math.PI / 2, 0, 0));
+    for (const xx of [-0.26, 0.0, 0.26]) {
+      B.add(new THREE.CylinderGeometry(0.1, 0.1, 0.07, 24), tyre, T(xx, 0.1, sz + Math.sign(sz) * 0.02, Math.PI / 2, 0, 0));
+      B.add(new THREE.CylinderGeometry(0.055, 0.055, 0.075, 16), M.plasticGrey, T(xx, 0.1, sz + Math.sign(sz) * 0.021, Math.PI / 2, 0, 0));
+      for (let k = 0; k < 5; k++) B.add(new THREE.BoxGeometry(0.008, 0.08, 0.004), M.metalBlack, T(xx, 0.1, sz + Math.sign(sz) * 0.06, 0, 0, (k / 5) * Math.PI));
+    }
+  }
+  // flag pole + pennant
+  B.add(new THREE.CylinderGeometry(0.004, 0.007, 1.0, 6), M.plasticBlack, T(-0.3, 1.06, -0.2));
+  B.add(new THREE.CylinderGeometry(0.02, 0.025, 0.04, 10), M.plasticBlack, T(-0.3, 0.6, -0.2));
+  const pen = new THREE.Shape(); pen.moveTo(0, 0); pen.lineTo(0.22, -0.06); pen.lineTo(0, -0.14); pen.lineTo(0, 0);
+  B.add(new THREE.ShapeGeometry(pen), swayMaterial({ color: 0xff6a10, roughness: 0.7 }, 0.03, 3), T(-0.3, 1.55, -0.2));
+  B.build(g);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), glow(0xff8a00, 10)); tip.position.set(-0.3, 1.57, -0.2); g.add(tip);
+  // livery on both flanks
+  const livery = drawCanvas(512, 160, (c) => {
+    c.clearRect(0, 0, 512, 160);
+    c.fillStyle = '#c8141e'; c.fillRect(0, 108, 512, 10);
+    c.fillStyle = '#16161a'; c.font = `900 54px ${LAT}`; c.fillText('KOI-TEI', 20, 72);
+    c.fillStyle = '#c8141e'; c.font = `bold 52px ${JP}`; c.fillText('出前', 270, 72);
+    c.fillStyle = '#555'; c.font = `600 18px ${LAT}`; c.fillText('UNIT 07 · CAUTION: HOT BROTH', 22, 146);
+  });
+  const lm = new THREE.MeshStandardMaterial({ map: livery, transparent: true, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2 });
+  for (const sz of [-1, 1]) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.155), lm); d.position.set(0.0, 0.43, sz * 0.262); if (sz < 0) d.rotation.y = Math.PI; g.add(d); }
   root.add(g);
+  const eyes = [];
+  for (const sz of [-0.075, 0.075]) { const e = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.035, 4, 8), glow(0x3af2ff, 6)); e.rotation.x = Math.PI / 2; e.position.set(0.372, 0.4, sz); g.add(e); eyes.push(e); }
   world.updaters.push((t) => {
     const k = (t * 0.045) % 1;
-    const z = 12 - k * 34;
-    g.position.set(6.25, 0.18, z);
+    g.position.set(6.25, 0.18, 12 - k * 34);
     g.rotation.y = Math.PI / 2;
-    wheels.forEach((w) => { w.rotation.y = -t * 6; });
-    eyeBlink(g, t);
+    g.position.y = 0.18 + Math.abs(Math.sin(t * 9)) * 0.004;
+    const v = (t % 4) > 0.12; eyes.forEach((e) => { e.visible = v; });
   });
 }
-function eyeBlink(g, t) { const v = (t % 4) > 0.12; g.children.forEach((c) => { if (c.geometry && c.geometry.type === 'CapsuleGeometry') c.visible = v; }); }
 
 function ramenAFrame(root) {
+  // wooden A-frame chalkboard: framed panels, hinges, spreader chain, rubber feet
   const tex = drawCanvas(256, 384, (c) => {
-    c.fillStyle = '#16100a'; c.fillRect(0, 0, 256, 384);
-    c.fillStyle = '#f2c46d'; c.font = `bold 46px ${JPM}`; c.textAlign = 'center'; c.fillText('本日の', 128, 60); c.fillText('一杯', 128, 115);
-    // a bowl illustration
-    c.fillStyle = '#f2ead8'; c.beginPath(); c.ellipse(128, 200, 86, 26, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#c9862a'; c.beginPath(); c.ellipse(128, 198, 76, 20, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#f7e7b0'; for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(90 + i * 15, 196 + (i % 2) * 4, 9, 0, 7); c.fill(); }
-    c.fillStyle = '#2a4a1a'; c.fillRect(150, 186, 30, 10); c.fillStyle = '#e8a090'; c.beginPath(); c.arc(110, 190, 16, 0, 7); c.fill();
-    c.fillStyle = '#9a1418'; c.beginPath(); c.moveTo(42, 200); c.quadraticCurveTo(128, 300, 214, 200); c.fill();
-    c.fillStyle = '#fff'; c.font = `bold 40px ${JP}`; c.fillText('特製豚骨', 128, 300);
-    c.fillStyle = '#ff5a3a'; c.font = `900 44px ${LAT}`; c.fillText('¥1,280', 128, 356);
+    c.fillStyle = '#1a2420'; c.fillRect(0, 0, 256, 384);
+    for (let i = 0; i < 900; i++) { c.fillStyle = `rgba(255,255,255,${Math.random() * 0.04})`; c.fillRect(Math.random() * 256, Math.random() * 384, 3, 1); }
+    c.fillStyle = '#f2c46d'; c.font = `bold 44px ${JPM}`; c.textAlign = 'center'; c.fillText('本日の', 128, 58); c.fillText('一杯', 128, 110);
+    c.fillStyle = '#f2ead8'; c.beginPath(); c.ellipse(128, 196, 84, 25, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#c9862a'; c.beginPath(); c.ellipse(128, 194, 74, 19, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#f7e7b0'; for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(90 + i * 15, 192 + (i % 2) * 4, 9, 0, 7); c.fill(); }
+    c.fillStyle = '#2a4a1a'; c.fillRect(150, 182, 30, 10); c.fillStyle = '#e8a090'; c.beginPath(); c.arc(110, 186, 16, 0, 7); c.fill();
+    c.strokeStyle = '#f2ead8'; c.lineWidth = 3; c.beginPath(); c.moveTo(42, 196); c.quadraticCurveTo(128, 292, 214, 196); c.stroke();
+    c.fillStyle = '#fff'; c.font = `bold 38px ${JP}`; c.fillText('特製豚骨', 128, 300);
+    c.fillStyle = '#ff7a5a'; c.font = `900 42px ${LAT}`; c.fillText('¥1,280', 128, 352);
   });
+  const board = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+  const B = new Batch('aframe');
+  const wood = M.wood;
+  const H = 0.95, Wd = 0.58, splay = 0.16;
   for (const s of [-1, 1]) {
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.9), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.6 }));
-    p.position.set(6.6 + s * 0.13, 0.62, 0.6); p.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2; p.rotateX(-0.15);
-    p.castShadow = true;
-    root.add(p);
+    const pm = T(6.6, 0.18, 0.6, 0, 0, 0).multiply(T(0, H, 0, 0, 0, s * splay)).multiply(T(0, -H / 2, 0, 0, s > 0 ? Math.PI / 2 : -Math.PI / 2, 0));
+    B.add(new THREE.BoxGeometry(Wd, 0.04, 0.03), wood, new THREE.Matrix4().multiplyMatrices(pm, T(0, H / 2 - 0.02, 0)));
+    B.add(new THREE.BoxGeometry(Wd, 0.04, 0.03), wood, new THREE.Matrix4().multiplyMatrices(pm, T(0, -H / 2 + 0.12, 0)));
+    for (const sx of [-1, 1]) B.add(new THREE.BoxGeometry(0.04, H, 0.03), wood, new THREE.Matrix4().multiplyMatrices(pm, T(sx * (Wd / 2 - 0.02), 0, 0)));
+    B.add(new THREE.PlaneGeometry(Wd - 0.08, H - 0.2), board, new THREE.Matrix4().multiplyMatrices(pm, T(0, 0.04, 0.009)));
+    for (const sx of [-1, 1]) B.add(new THREE.BoxGeometry(0.05, 0.02, 0.04), M.rubber, new THREE.Matrix4().multiplyMatrices(pm, T(sx * (Wd / 2 - 0.02), -H / 2 + 0.01, 0)));
   }
+  for (const sz of [-0.2, 0.2]) B.add(new THREE.CylinderGeometry(0.01, 0.01, 0.05, 8), M.brass, T(6.6, 0.18 + H, 0.6 + sz, 0, 0, Math.PI / 2));
+  B.rod(M.galv, 0.004, new THREE.Vector3(6.6 - 0.2 * Math.sin(splay) * 2.2, 0.55, 0.6), new THREE.Vector3(6.6 + 0.2 * Math.sin(splay) * 2.2, 0.55, 0.6));
+  B.build(root);
 }
 
 /* --------------------------------- People ------------------------------ */

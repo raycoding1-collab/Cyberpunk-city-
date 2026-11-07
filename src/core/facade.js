@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { boxGeo, T } from './utils.js';
+import { boxGeo, cbox, autoChamfer, T } from './utils.js';
 import { WindowSystem } from './windows.js';
 
 /* =================================================================== */
@@ -29,13 +29,16 @@ export class Frame {
     return T(p.x, p.y, p.z, rx, this.ry, rz, s, s, s);
   }
   /** add a box given in local coords: centre (u,v,w) and size (du,dv,dw) */
-  box(batch, mat, u, v, w, du, dv, dw, uvs = 0.5) {
+  box(batch, mat, u, v, w, du, dv, dw, uvs = 0.5, ch = -1) {
     const p = this.p(u, v, w);
-    batch.add(boxGeo(du, dv, dw, uvs, (u * 0.37) % 1, (v * 0.21) % 1), mat, T(p.x, p.y, p.z, 0, this.ry, 0));
+    const c = ch < 0 ? autoChamfer(du, dv, dw) : ch;
+    const g = c > 0 ? cbox(du, dv, dw, uvs, (u * 0.37) % 1, (v * 0.21) % 1, c) : boxGeo(du, dv, dw, uvs, (u * 0.37) % 1, (v * 0.21) % 1);
+    batch.add(g, mat, T(p.x, p.y, p.z, 0, this.ry, 0));
   }
   /** cylinder along local axis: 'u' | 'v' | 'w' */
   cyl(batch, mat, r, len, u, v, w, axis = 'v', seg = 10) {
-    const g = new THREE.CylinderGeometry(r, r, len, seg);
+    const thin = r < 0.02;
+    const g = new THREE.CylinderGeometry(r, r, len, thin ? Math.min(seg, 5) : seg, 1, thin);
     if (axis === 'u') g.rotateZ(Math.PI / 2);
     if (axis === 'w') g.rotateX(Math.PI / 2);
     batch.add(g, mat, this.m(u, v, w));
@@ -63,7 +66,7 @@ export function wallWithOpenings(batch, mat, frame, length, height, thick, openi
     }
     if (height > v + eps) solids.push([v, height]);
     for (const [va, vb] of solids) {
-      frame.box(batch, mat, u0 + (ua + ub) / 2, v0 + (va + vb) / 2, -thick / 2, ub - ua, vb - va, thick, uvs);
+      frame.box(batch, mat, u0 + (ua + ub) / 2, v0 + (va + vb) / 2, -thick / 2, ub - ua, vb - va, thick, uvs, 0);
     }
   }
 }
@@ -78,8 +81,10 @@ export function wallWithWindows(batch, mat, frame, length, height, thick, wins, 
   for (const o of wins) {
     const inset = o.inset ?? 0.14;
     const c = frame.p(u0 + o.u + o.w / 2, v0 + o.v + o.h / 2, -inset);
+    const { u, v, w, h, inset: _i, sill: _s, ...extra } = o;
     windowSys.add(c.x, c.y, c.z, frame.ry, o.w, o.h, {
-      style: o.style ?? 0, depth: o.depth ?? 3.2, lit: o.lit ?? 0.55, seed: o.seed ?? (c.x * 13.7 + c.y * 7.1 + c.z * 3.3), tint: o.tint ?? 0,
+      ...extra,
+      style: o.style ?? 0, depth: o.depth ?? 3.2, lit: o.lit ?? 0.55, seed: o.seed ?? (c.x * 13.7 + c.y * 7.1 + c.z * 3.3), tint: o.tint ?? 0, kind: o.kind ?? opts.kind,
     });
     if (o.sill !== false && opts.sillMat) {
       frame.box(batch, opts.sillMat, u0 + o.u + o.w / 2, v0 + o.v - 0.03, 0.03, o.w + 0.1, 0.06, 0.12 + inset);

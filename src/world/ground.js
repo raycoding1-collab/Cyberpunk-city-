@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
-import { Batch, boxGeo, T, U, GLSL_NOISE, RNG } from '../core/utils.js';
+import { Batch, boxGeo, cbox, T, U, GLSL_NOISE, RNG } from '../core/utils.js';
 import { M } from '../core/materials.js';
 import { drawCanvas, tex } from '../core/textures.js';
 import { L } from './layout.js';
@@ -136,7 +136,7 @@ export function buildGround(scene, { reflectScale = 0.5 } = {}) {
 
   const orig = reflector.onBeforeRender;
   reflector.onBeforeRender = function (renderer, sc, camera, ...rest) {
-    if (REFLECT.quality.value <= 0) return;
+    if (REFLECT.quality.value <= 0 || REFLECT.suspend) return;
     for (const m of REFLECT.hidden) m.visible = false;
     orig.call(this, renderer, sc, camera, ...rest);
     for (const m of REFLECT.hidden) m.visible = true;
@@ -153,7 +153,7 @@ export function buildGround(scene, { reflectScale = 0.5 } = {}) {
   const curbB = new Batch('curbs');
   const h = L.curbH;
   const walk = (x0, x1, z0, z1) => {
-    const g = boxGeo(x1 - x0, h, z1 - z0, 0.5, x0 * 0.5, z0 * 0.5);
+    const g = cbox(x1 - x0, h, z1 - z0, 0.5, x0 * 0.5, z0 * 0.5, 0.012);
     B.add(g, walkMat, T((x0 + x1) / 2, h / 2, (z0 + z1) / 2));
   };
   // main street sidewalks (gaps for the alley mouth are paved as a driveway apron)
@@ -164,7 +164,7 @@ export function buildGround(scene, { reflectScale = 0.5 } = {}) {
   walk(-90, -5.15, -44, -41.65); walk(-90, -5.15, -34.35, -32);
   // kerbs (granite, chamfered by a second thin box)
   const kerb = (x0, x1, z0, z1) => {
-    curbB.add(boxGeo(x1 - x0, h + 0.02, z1 - z0, 0.5), curbMat, T((x0 + x1) / 2, (h + 0.02) / 2 - 0.01, (z0 + z1) / 2));
+    curbB.add(cbox(x1 - x0, h + 0.02, z1 - z0, 0.5, 0, 0, 0.035), curbMat, T((x0 + x1) / 2, (h + 0.02) / 2 - 0.01, (z0 + z1) / 2));
   };
   kerb(5.0, 5.15, -32, 45); kerb(-5.15, -5.0, -32, 45);
   kerb(5.0, 5.15, -130, -44); kerb(-5.15, -5.0, -130, -44);

@@ -5,7 +5,7 @@ import { drawCanvas } from '../core/textures.js';
 import { Frame, wallWithOpenings, wallWithWindows } from '../core/facade.js';
 import { WIN } from '../core/windows.js';
 import { neonSign } from '../core/neon.js';
-import { acUnit, plant, laundryLine, dish, waterTank, meterBox, crateStack, trashBag, bicycle, leafMaterials } from '../core/prefabs.js';
+import { acUnit, plant, laundryLine, dish, waterTank, meterBox, crateStack, trashBag, bicycle, futon } from '../core/prefabs.js';
 import { lightBox, chaser, rectPerimeter, JP, JPM, LAT, vtext, rr, faceMaterial } from './signs.js';
 import { buildRamen } from './ramen.js';
 import { buildKoiHologram } from '../fx/hologram.js';
@@ -230,8 +230,10 @@ function buildCapsules(world, B, root) {
   // pod frames: rounded plastic rings
   const ring = roundRectShape(1.12, 1.0, 0.22);
   ring.holes.push(roundRectPath(podW, podH, 0.17));
-  const ringGeo = new THREE.ExtrudeGeometry(ring, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2, curveSegments: 6 });
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0xe9e6dc, roughness: 0.3, metalness: 0.05 });
+  const ringGeo = new THREE.ExtrudeGeometry(ring, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: 6 });
+  ringGeo.scale(0.94, 0.94, 1);
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.34, metalness: 0.4 });
+  const bezelCols = [0xb4b8bc, 0xe6e2d6, 0xd2c6a6, 0x9aa0a6, 0xe6e2d6];
   const frames = new THREE.InstancedMesh(ringGeo, ringMat, pods.length);
   const inner = new THREE.InstancedMesh(new THREE.PlaneGeometry(podW, podH), podMaterial(), pods.length);
   const aPod = new Float32Array(pods.length * 4);
@@ -241,7 +243,42 @@ function buildCapsules(world, B, root) {
     inner.setMatrixAt(i, p.F.m(p.u, p.v + podH / 2, -0.24));
     const on = rng.chance(0.68) ? 1 : 0;
     aPod.set([rng.next(), rng.chance(0.4) ? rng.range(0.15, 0.85) : 0, rng.next(), on], i * 4);
+    frames.setColorAt(i, new THREE.Color(bezelCols[rng.int(0, bezelCols.length - 1)]));
   });
+  frames.instanceColor.needsUpdate = true;
+  // weathering + hardware per pod: grime streak, louvred vent, numbered plate, the odd sticker
+  const streakTex = drawCanvas(128, 256, (x) => {
+    x.clearRect(0, 0, 128, 256);
+    for (let i = 0; i < 26; i++) {
+      const px = 10 + Math.random() * 108, w = 1 + Math.random() * 5, len = 60 + Math.random() * 190;
+      const g = x.createLinearGradient(0, 0, 0, len); g.addColorStop(0, `rgba(255,255,255,${0.35 + Math.random() * 0.5})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(px, 0, w, len);
+    }
+    const g2 = x.createLinearGradient(0, 0, 0, 40); g2.addColorStop(0, 'rgba(255,255,255,0.6)'); g2.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g2; x.fillRect(4, 0, 120, 40);
+  }, { srgb: false });
+  const grime = new THREE.MeshBasicMaterial({ color: 0x050403, alphaMap: streakTex, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+  grime.userData.noShadow = true;
+  const grimeIM = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 0.75), grime, pods.length);
+  const ventIM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.07, 0.02), M.galv, pods.length);
+  const plateIM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 0.035, 0.008), glow(0xcfe6ff, 0.9), pods.length);
+  pods.forEach((p, i) => {
+    grimeIM.setMatrixAt(i, p.F.m(p.u + rng.range(-0.05, 0.05), p.v - 0.42, 0.003).multiply(T(0, 0, 0, 0, 0, 0, rng.range(0.7, 1.1), rng.range(0.6, 1.2), 1)));
+    ventIM.setMatrixAt(i, p.F.m(p.u + 0.42, p.v + podH + 0.12, 0.01));
+    plateIM.setMatrixAt(i, p.F.m(p.u - 0.4, p.v + podH + 0.11, 0.006));
+  });
+  for (const im of [grimeIM, ventIM, plateIM]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); root.add(im); }
+  // a few pods with life of their own: taped "故障中" (out of order), stickers, a towel hung in the opening
+  const odd = drawCanvas(256, 256, (x) => {
+    x.clearRect(0, 0, 256, 256);
+    x.fillStyle = 'rgba(220,200,150,0.95)'; x.save(); x.translate(128, 128); x.rotate(0.6); x.fillRect(-150, -12, 300, 24); x.rotate(-1.2); x.fillRect(-150, -12, 300, 24); x.restore();
+    x.fillStyle = '#fff'; x.fillRect(70, 96, 116, 64); x.fillStyle = '#d00'; x.font = 'bold 34px sans-serif'; x.textAlign = 'center'; x.fillText('故障中', 128, 140);
+  });
+  const oddM = new THREE.MeshBasicMaterial({ map: odd, transparent: true, depthWrite: false });
+  for (const k of [7, 23, 41, 66, 80]) {
+    const p = pods[k % pods.length];
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(podW * 0.98, podH * 0.98), oddM);
+    m.applyMatrix4(p.F.m(p.u, p.v + podH / 2, -0.2)); root.add(m);
+  }
   inner.geometry.setAttribute('aPod', new THREE.InstancedBufferAttribute(aPod, 4));
   frames.castShadow = true; frames.receiveShadow = true;
   frames.computeBoundingSphere(); inner.computeBoundingSphere();
@@ -388,9 +425,10 @@ function module(world, B, root, F, s, rng) {
     if (rng.chance(0.5)) F.box(B, M.glassFrost, uc, v0 + 0.16 + railH * 0.5, proj - 0.06, w - 0.3, railH * 0.85, 0.012);
     else for (let uu = u0 + 0.2; uu < u0 + w - 0.15; uu += 0.11) F.cyl(B, M.steel, 0.008, railH - 0.05, uu, v0 + 0.16 + railH / 2, proj - 0.05, 'v', 4);
     // stuff on the balcony
-    ac.place(B, F.m(u0 + 0.7, v0 + 0.16, proj - rec + 0.45));
+    ac.place(B, F.m(u0 + 0.7, v0 + 0.16, proj - rec + 0.45), { floor: true });
     for (let i = 0; i < rng.int(1, 4); i++) plant(B, F.m(u0 + 1.6 + i * 0.45, v0 + 0.16, proj - 0.3), rng, { size: rng.range(0.8, 1.3) });
     laundryLine(B, F.p(u0 + 0.15, v0 + 2.35, proj - 0.55), F.p(u0 + w - 0.15, v0 + 2.35, proj - 0.55), rng, rng.range(0.5, 0.8));
+    if (rng.chance(0.4)) futon(B, F.m(u0 + w * (0.3 + rng.range(0, 0.35)), v0 + 0.16 + railH + 0.03, proj - 0.05), rng, { width: Math.min(1.0, w * 0.35) });
     if (rng.chance(0.45)) {
       // folding chair
       const c = F.m(u0 + w - 0.8, v0 + 0.16, proj - 0.6);
@@ -410,7 +448,7 @@ function module(world, B, root, F, s, rng) {
   } else if (type === 'green') {
     // hydroponic greenhouse box: thin black frame, frosted glass lit magenta
     const cols = Math.max(2, Math.round(w / 0.8));
-    const gm = new THREE.MeshStandardMaterial({ color: 0x1a0a20, roughness: 0.35, transparent: true, opacity: 0.55, emissive: 0xd23cff, emissiveIntensity: 0.9 });
+    const gm = new THREE.MeshStandardMaterial({ color: 0x1a0a20, roughness: 0.12, transparent: true, opacity: 0.3, emissive: 0xd23cff, emissiveIntensity: 0.22, depthWrite: false });
     F.box(B, gm, uc, v0 + h / 2, proj - 0.02, w - 0.06, h - 0.3, 0.02);
     F.box(B, gm, u0 + 0.03, v0 + h / 2, proj / 2, 0.02, h - 0.3, proj);
     F.box(B, gm, u0 + w - 0.03, v0 + h / 2, proj / 2, 0.02, h - 0.3, proj);
@@ -420,9 +458,8 @@ function module(world, B, root, F, s, rng) {
     for (const vv of [0.35, 1.25, 2.15]) {
       F.box(B, M.metalDark, uc, v0 + vv, proj * 0.5, w - 0.3, 0.03, proj * 0.7);
       F.box(B, glow(0xff3cf0, 6), uc, v0 + vv + 0.68, proj * 0.5, w - 0.4, 0.025, 0.05);
-      for (let uu = u0 + 0.35; uu < u0 + w - 0.25; uu += 0.32) {
-        const lm = leafMaterials()[1];
-        for (let k = 0; k < 2; k++) B.add(new THREE.PlaneGeometry(0.34, 0.34), lm, F.m(uu, v0 + vv + 0.18, proj * 0.5 + (k - 0.5) * 0.25).multiply(T(0, 0, 0, 0, rng.range(0, 3), 0)));
+      for (let uu = u0 + 0.4; uu < u0 + w - 0.3; uu += 0.42) {
+        plant(B, F.m(uu, v0 + vv + 0.015, proj * 0.5), rng, { size: 0.55, species: ['herbs', 'negi', 'herbs', 'snake'][Math.floor(Math.abs(uu * 7 + vv * 3)) % 4] });
       }
     }
     if (!world._greenLit) { world._greenLit = true; world.lights.push({ pos: F.p(uc, v0 + 1.5, proj + 0.6), color: 0xd23cff, intensity: 3.5, distance: 7 }); }
@@ -450,9 +487,51 @@ function module(world, B, root, F, s, rng) {
     F.box(B, M.terracotta, uc, v0 + 0.16 + 0.72, proj + 0.12, ww, 0.18, 0.22);
     for (let i = 0; i < 3; i++) plant(B, F.m(uc - ww / 3 + i * (ww / 3), v0 + 0.16 + 0.7, proj + 0.12), rng, { size: 0.5, pot: 'black' });
   }
-  // every module: small bathroom exhaust + a pipe down one side
-  F.box(B, M.galv, u0 + (rng.chance(0.5) ? 0.4 : w - 0.4), v0 + h - 0.45, proj + 0.07, 0.2, 0.16, 0.14);
-  if (rng.chance(0.6)) F.cyl(B, M.plasticGrey, 0.035, h, u0 + (rng.chance(0.5) ? 0.2 : w - 0.2), v0 + h / 2, proj + 0.06, 'v', 8);
+  moduleTrim(world, B, root, F, s, rng);
+}
+
+/* How an add-on box is actually built: flashing, trims, gutters, fixings. */
+function moduleTrim(world, B, root, F, s, rng) {
+  const { type, u0, w, v0, h, proj, mat } = s;
+  const uc = u0 + w / 2;
+  const metal = rng.chance(0.5) ? M.galv : M.metalDark;
+  // roof flashing with a drip-edge fascia that overhangs the face
+  F.box(B, metal, uc, v0 + h + 0.015, proj / 2 + 0.03, w + 0.1, 0.03, proj + 0.1, 0.5, 0);
+  F.box(B, metal, uc, v0 + h - 0.04, proj + 0.075, w + 0.1, 0.12, 0.02, 0.5, 0);
+  for (const s2 of [-1, 1]) F.box(B, metal, uc + s2 * (w / 2 + 0.04), v0 + h - 0.04, proj / 2 + 0.03, 0.02, 0.12, proj + 0.1, 0.5, 0);
+  if (type === 'green') return;
+  // corner angles + base flashing
+  for (const uu of [u0 + 0.015, u0 + w - 0.015]) F.box(B, metal, uu, v0 + h / 2, proj - 0.01, 0.05, h - 0.08, 0.05, 0.5, 0);
+  F.box(B, metal, uc, v0 + 0.19, proj + 0.01, w, 0.035, 0.035, 0.5, 0);
+  // cover battens on painted sheet modules
+  if (mat === M.paintMint || mat === M.paintCream || mat === M.paintRed || mat === M.paintBlue) {
+    for (let uu = u0 + 0.9; uu < u0 + w - 0.5; uu += 0.92) F.box(B, mat, uu, v0 + h / 2, proj + 0.008, 0.04, h - 0.35, 0.016, 0.5, 0);
+    for (let uu = u0 + 0.9; uu < u0 + w - 0.5; uu += 0.92) for (let vv = v0 + 0.45; vv < v0 + h - 0.3; vv += 0.6) F.cyl(B, M.steel, 0.006, 0.01, uu, vv, proj + 0.02, 'w', 6);
+  }
+  // half-round gutter + downpipe with brackets
+  if (rng.chance(0.55)) {
+    const g = new THREE.CylinderGeometry(0.055, 0.055, w + 0.06, 10, 1, true, 0, Math.PI);
+    g.rotateZ(Math.PI / 2);
+    B.add(g, M.plasticGrey, F.m(uc, v0 + h - 0.12, proj + 0.14, 0, 0).multiply(T(0, 0, 0, Math.PI, 0, 0)));
+    const du = rng.chance(0.5) ? u0 + 0.12 : u0 + w - 0.12;
+    F.cyl(B, M.plasticGrey, 0.04, h - 0.1, du, v0 + h / 2 - 0.08, proj + 0.12, 'v', 8);
+    for (let vv = v0 + 0.5; vv < v0 + h - 0.3; vv += 1.0) F.box(B, M.galv, du, vv, proj + 0.07, 0.1, 0.025, 0.1, 0.5, 0);
+    world.drips = world.drips || [];
+    world.drips.push(F.p(du, v0 + 0.1, proj + 0.12));
+  }
+  // small bathroom exhaust hood + bulkhead lamp + electricity meter
+  F.box(B, M.galv, u0 + (rng.chance(0.5) ? 0.4 : w - 0.4), v0 + h - 0.5, proj + 0.07, 0.2, 0.16, 0.14);
+  if (rng.chance(0.35)) {
+    const lu = u0 + (rng.chance(0.5) ? 0.35 : w - 0.35), lv = v0 + 2.2;
+    F.box(B, M.metalBlack, lu, lv, proj + 0.05, 0.16, 0.22, 0.08);
+    F.box(B, glow(rng.chance(0.7) ? 0xffd9a0 : 0xcfe8ff, 2.2), lu, lv, proj + 0.095, 0.11, 0.16, 0.02, 0.5, 0);
+    for (const dv of [-0.04, 0.04]) F.box(B, M.metalBlack, lu, lv + dv, proj + 0.1, 0.13, 0.01, 0.015, 0.5, 0);
+  }
+  if (rng.chance(0.25)) {
+    F.box(B, M.plasticGrey, u0 + w - 0.35, v0 + 1.4, proj + 0.07, 0.24, 0.32, 0.1);
+    F.box(B, M.glassFrost, u0 + w - 0.35, v0 + 1.45, proj + 0.125, 0.16, 0.1, 0.01, 0.5, 0);
+    F.cyl(B, M.cable, 0.012, 1.4, u0 + w - 0.3, v0 + 2.1, proj + 0.07, 'v', 5);
+  }
 }
 
 /* ===================================================================== */
@@ -466,7 +545,7 @@ function buildCornerAndSigns(world, B, root) {
   for (const [x, z] of [[cx0 - 0.01, cz1 + 0.01], [cx0 - 0.01, cz0 + 0.3]]) B.add(new THREE.BoxGeometry(0.03, y1 - y0, 0.03), glow(0x19e6ff, 2.6), T(x, (y0 + y1) / 2, z));
   // stair windows on the riser (lit landing every floor)
   for (let f = 0; f < NFLOORS; f++) {
-    world.windows.add(cx0 - 0.01, RES0 + f * FLOOR + 1.9, (cz0 + cz1) / 2 + 0.15, -Math.PI / 2, 0.5, 1.0, { style: WIN.GRID, depth: 1.2, lit: 0.9, seed: 300 + f });
+    world.windows.add(cx0 - 0.01, RES0 + f * FLOOR + 1.9, (cz0 + cz1) / 2 + 0.15, -Math.PI / 2, 0.5, 1.0, { style: WIN.GRID, depth: 1.2, lit: 0.9, seed: 300 + f, kind: 'stair' });
   }
 
   // ===== the 鯉亭 blade sign: 15 m double-sided light box with chasers =====

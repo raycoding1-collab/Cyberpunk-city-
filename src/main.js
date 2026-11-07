@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
-import { buildMaterials, M } from './core/materials.js';
+import { buildMaterials, M, weatherizeScene } from './core/materials.js';
 import { setAnisotropy } from './core/textures.js';
 import { WindowSystem } from './core/windows.js';
 import { U } from './core/utils.js';
@@ -76,6 +76,19 @@ async function boot() {
     await tick();
   }
   world.windows.build(scene);
+  const nW = weatherizeScene(scene);
+  if (CAPTURE) console.log('weathered materials', nW);
+  if (params.get('tris')) {
+    const by = new Map();
+    scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = o.geometry; const n = (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1) * (g.isInstancedBufferGeometry ? g.instanceCount : 1);
+      let p = o; while (p.parent && p.parent !== scene) p = p.parent;
+      const key = (p.name || p.type) + ' / ' + (o.name || o.parent?.name || '') + ' / ' + (o.material?.name || o.material?.type);
+      by.set(key, (by.get(key) || 0) + n);
+    });
+    [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25).forEach(([k, v]) => console.log('TRIS', Math.round(v), k));
+  }
 
   /* ------------------------------ lighting ----------------------------- */
   // sky fill: violet light-pollution dome, near-black bounce from the wet street
@@ -119,10 +132,10 @@ async function boot() {
     set(i) {
       this.i = i;
       const cfg = [
-        { pr: Math.min(DPR, 2.0), refl: 0.6, rq: 1, shadows: true, streak: true },
-        { pr: Math.min(DPR, 1.5), refl: 0.5, rq: 1, shadows: true, streak: true },
-        { pr: Math.min(DPR, 1.0), refl: 0.35, rq: 1, shadows: true, streak: false },
-        { pr: Math.min(DPR, 0.75), refl: 0.25, rq: 0, shadows: false, streak: false },
+        { pr: Math.min(DPR, 2.0), refl: 0.6, rq: 1, shadows: true, streak: true, ao: true },
+        { pr: Math.min(DPR, 1.5), refl: 0.5, rq: 1, shadows: true, streak: true, ao: true },
+        { pr: Math.min(DPR, 1.0), refl: 0.35, rq: 1, shadows: true, streak: false, ao: false },
+        { pr: Math.min(DPR, 0.75), refl: 0.25, rq: 0, shadows: false, streak: false, ao: false },
       ][i];
       const shadowChange = renderer.shadowMap.enabled !== cfg.shadows;
       renderer.setPixelRatio(cfg.pr);
@@ -131,6 +144,7 @@ async function boot() {
       renderer.shadowMap.enabled = cfg.shadows;
       if (shadowChange) scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
       post.streak.enabled = cfg.streak;
+      post.ao.enabled = cfg.ao;
       resize();
     },
     cycle() { this.set((this.i + 1) % this.levels.length); },
@@ -157,11 +171,12 @@ async function boot() {
     if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   }
   director.updateButtons();
+  for (const n of (params.get('hide') || '').split(',').filter(Boolean)) scene.traverse((o) => { if (o.name === n) o.visible = false; });
   if (params.get('rain') === '0') U.rain.value = 0;
 
   bootbar.style.width = '100%';
   document.getElementById('boot').classList.add('done');
-  if (CAPTURE) document.getElementById('boot').remove();
+  if (CAPTURE) { document.getElementById('boot').remove(); window.__dbg = { Raycaster: THREE.Raycaster, Vector2: THREE.Vector2, scene, camera }; }
   if (params.get('hud') === '0') document.getElementById('hud').remove();
 
   /* -------------------------------- loop ------------------------------- */

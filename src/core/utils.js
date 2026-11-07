@@ -65,6 +65,61 @@ export function boxGeo(w, h, d, s = 1, ou = 0, ov = 0) {
   return g;
 }
 
+/**
+ * Chamfered box: 6 faces + 12 bevel strips + 8 corner facets, flat-shaded so
+ * every edge catches a thin highlight like cast concrete or pressed metal.
+ * Planar UVs in metres (× s).
+ */
+export function cbox(w, h, d, s = 1, ou = 0, ov = 0, c = 0.02) {
+  const hx = w / 2, hy = h / 2, hz = d / 2;
+  c = Math.min(c, hx * 0.45, hy * 0.45, hz * 0.45);
+  const P = (sx, sy, sz, axis) => {
+    if (axis === 0) return [sx * hx, sy * (hy - c), sz * (hz - c)];
+    if (axis === 1) return [sx * (hx - c), sy * hy, sz * (hz - c)];
+    return [sx * (hx - c), sy * (hy - c), sz * hz];
+  };
+  const pos = [], nrm = [], uv = [];
+  const poly = (pts) => {
+    // orient outward (convex hull around the origin)
+    const a = new THREE.Vector3(...pts[0]), b = new THREE.Vector3(...pts[1]), cc = new THREE.Vector3(...pts[2]);
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(cc, a)).normalize();
+    const cen = pts.reduce((acc, p) => acc.add(new THREE.Vector3(...p)), new THREE.Vector3()).divideScalar(pts.length);
+    if (n.dot(cen) < 0) { pts = pts.slice().reverse(); n.negate(); }
+    const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+    const proj = (p) => (ax >= ay && ax >= az) ? [p[2] * Math.sign(n.x || 1), p[1]] : (ay >= az ? [p[0], p[2] * -Math.sign(n.y || 1)] : [p[0] * Math.sign(n.z || 1), p[1]]);
+    for (let i = 1; i < pts.length - 1; i++) {
+      for (const p of [pts[0], pts[i], pts[i + 1]]) {
+        pos.push(...p); nrm.push(n.x, n.y, n.z);
+        const q = proj(p); uv.push(q[0] * s + ou, q[1] * s + ov);
+      }
+    }
+  };
+  const S = [-1, 1];
+  // main faces
+  for (const sx of S) poly([P(sx, -1, -1, 0), P(sx, 1, -1, 0), P(sx, 1, 1, 0), P(sx, -1, 1, 0)]);
+  for (const sy of S) poly([P(-1, sy, -1, 1), P(1, sy, -1, 1), P(1, sy, 1, 1), P(-1, sy, 1, 1)]);
+  for (const sz of S) poly([P(-1, -1, sz, 2), P(1, -1, sz, 2), P(1, 1, sz, 2), P(-1, 1, sz, 2)]);
+  if (c > 1e-4) {
+    // bevel strips
+    for (const sx of S) for (const sy of S) poly([P(sx, sy, -1, 0), P(sx, sy, 1, 0), P(sx, sy, 1, 1), P(sx, sy, -1, 1)]);
+    for (const sx of S) for (const sz of S) poly([P(sx, -1, sz, 0), P(sx, 1, sz, 0), P(sx, 1, sz, 2), P(sx, -1, sz, 2)]);
+    for (const sy of S) for (const sz of S) poly([P(-1, sy, sz, 1), P(1, sy, sz, 1), P(1, sy, sz, 2), P(-1, sy, sz, 2)]);
+    // corner facets
+    for (const sx of S) for (const sy of S) for (const sz of S) poly([P(sx, sy, sz, 0), P(sx, sy, sz, 1), P(sx, sy, sz, 2)]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+/** Auto chamfer size for architectural elements (0 for thin parts). */
+export function autoChamfer(w, h, d) {
+  const m = Math.min(w, h, d);
+  return m < 0.09 ? 0 : Math.min(0.03, m * 0.14);
+}
+
 /** Plane with metre-scaled UVs. */
 export function planeGeo(w, h, s = 1, ou = 0, ov = 0) {
   const g = new THREE.PlaneGeometry(w, h);
@@ -150,11 +205,14 @@ export class Batch {
     return this;
   }
   /** axis-aligned box, centre at x,y,z, optional rotation about Y */
-  box(material, w, h, d, x, y, z, ry = 0, s = 0.5) {
-    return this.add(boxGeo(w, h, d, s, _uvr() * 3, _uvr() * 3), material, T(x, y, z, 0, ry, 0));
+  box(material, w, h, d, x, y, z, ry = 0, s = 0.5, ch = -1) {
+    const c = ch < 0 ? autoChamfer(w, h, d) : ch;
+    const g = c > 0 ? cbox(w, h, d, s, _uvr() * 3, _uvr() * 3, c) : boxGeo(w, h, d, s, _uvr() * 3, _uvr() * 3);
+    return this.add(g, material, T(x, y, z, 0, ry, 0));
   }
-  boxR(material, w, h, d, x, y, z, rx, ry, rz, s = 0.5) {
-    return this.add(boxGeo(w, h, d, s), material, T(x, y, z, rx, ry, rz));
+  boxR(material, w, h, d, x, y, z, rx, ry, rz, s = 0.5, ch = -1) {
+    const c = ch < 0 ? autoChamfer(w, h, d) : ch;
+    return this.add(c > 0 ? cbox(w, h, d, s, 0, 0, c) : boxGeo(w, h, d, s), material, T(x, y, z, rx, ry, rz));
   }
   cyl(material, rt, rb, h, x, y, z, seg = 12, rx = 0, ry = 0, rz = 0) {
     return this.add(new THREE.CylinderGeometry(rt, rb, h, seg), material, T(x, y, z, rx, ry, rz));

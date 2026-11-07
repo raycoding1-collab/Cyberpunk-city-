@@ -68,6 +68,28 @@ URL options: `?shot=ramen`, `?q=low`, `?rain=0`, `?hud=0`.
 
 ---
 
+## Built like the real thing
+
+The second pass went object by object to remove anything that read as a template or a placeholder:
+
+* **Windows are physical objects.** Each one has a 3D frame in anodised aluminium, bronze, black or white PVC. Sliders run on two tracks and are often left partly open, with a crescent latch, sill flashing and drip edge. Some also get an insect screen, a bathroom grille, or an amado storm-shutter box with a half-drawn shutter.
+  * **Behind the glass:** eight room types (living room, bedroom, kitchen, office, storage, stairwell, shop, bath), four kinds of lamp, TVs, monitors, the occasional occupant, sill clutter, and six kinds of curtain or blind (including shōji).
+  * **The glass itself:** seven types (clear, wired, frosted, tinted, taped, newspaper-covered, grimy with "for rent" stickers), with rain beads that refract the room.
+* **Architecture with construction detail.** Edges are chamfered so they catch light. Add-on modules have drip-edge roof flashing, corner angles, base flashing, cover battens and rivets, half-round gutters with bracketed downpipes, bulkhead lamps and meter boxes. Every surrounding building has its own façade program (residential units, paired windows, ribbons, curtain wall, balconies, hotel) instead of a uniform grid.
+* **No stamped props.** Each placement picks its own model and finish:
+  * **AC condensers:** four different models (single-fan, slim, twin-fan and an old caged unit), in five finishes, some under wooden louvre covers.
+  * **Plants:** real curved 3D leaves on nine species (snake plant, ficus, pothos, kentia palm, pine bonsai, cactus, echeveria, green onions, a dead one), in terracotta, nursery, glazed, styrofoam, tin or tray containers.
+  * **Laundry that drapes:** shirts on wire hangers, towels folded over the pole, pinch hangers of socks, trousers, and futons airing over railings.
+* **Hero objects designed in full.**
+  * **KIRIN-7 hover car:** a lofted coupé body with panel gaps and a painted roof over a tumblehome glasshouse; aerofoil-lipped ducted fans with blades and stators; segmented LED light bars, projector lamps and a lit cabin.
+  * **Delivery robot:** a six-wheel courier with rocker-bogie suspension, treaded tyres and a lidded shell.
+  * **Ramen awning:** striped canvas sagging between steel rafters, with a scalloped printed valance.
+  * **Chōchin lanterns:** washi over bamboo ribs, with lacquered caps.
+  * **A-frame chalkboard:** a framed wooden easel.
+  * **Capsule pods:** each with its own bezel finish, grime streak, vent and number plate; a few are out of order.
+* **People.** Sculpted figures with knees, elbows, jaws and shoes. Each is dressed from a wardrobe (trench, jacket, hoodie, puffer, suit, sometimes in wet raincoat fabric) with hair, hats, face masks, bags and headphones, and some carry clear LED or plain black umbrellas.
+* **Light that lands.** Ground-truth ambient occlusion gives contact shadows under every ledge, AC unit and balcony, and neon is never darkened by it. A rain-weathering shader puts standing water on ledges, rivulets on walls and a splash zone at street level. Shop glass reflects at full Fresnel strength and carries droplets.
+
 ## How it's made
 
 * **Three.js r187.** ES modules bundled by esbuild into a single HTML file (`build.mjs`).
@@ -76,13 +98,13 @@ URL options: `?shot=ramen`, `?q=low`, `?rain=0`, `?hud=0`.
 * **Interior-mapped windows.** About 2,000 instanced panes, each ray-marching a fake room behind the glass: walls, floor, ceiling-lamp falloff, furniture silhouettes, curtains, blinds and flickering TVs. The glass stays a reflective PBR surface. All of it is one draw call (`src/core/windows.js`).
 * **Wet ground.** A planar reflector plus a shader with procedural puddles (mirror-sharp), anisotropic vertical streaks on damp asphalt, and animated raindrop ripples that bend both the normals and the reflections (`src/world/ground.js`).
 * **Lighting.** About 30 coloured point lights, spot lights and RectAreaLights, all placed where real sources are: signs, shopfronts, lamps, the screen, the hologram and the passing train. There are shadow-casting spots from the ramen doorway and a street lamp, a scene-captured PMREM environment for glass and car paint, and a violet sky dome with lit clouds and searchlights.
-* **Post-processing.** HDR bloom, anamorphic streaks, chromatic fringing, a split-tone grade, ACES tonemapping and film grain (`src/fx/post.js`).
+* **Post-processing.** GTAO ambient occlusion (emissive-safe), HDR bloom, subtle anamorphic streaks, chromatic fringing, a split-tone grade, ACES tonemapping and film grain (`src/fx/post.js`).
 * **Atmosphere.** 16k rain streaks that pick up the colour of nearby neon, splash crowns, steam plumes from kitchens, manholes and cooling towers, volumetric light shafts, and drones including a police searchlight (`src/fx/atmosphere.js`).
-* **Performance.** Geometry is merged per material (`Batch`), props are stamped from prefabs, and the scene runs about 2–3k draw calls including the reflection and shadow passes. The quality level steps down automatically.
+* **Performance.** Geometry is merged per material (`Batch`), window frames and repeated parts are instanced, and distant towers use lighter AC models. This is a heavy scene (several thousand draw calls and millions of triangles per frame once reflection, shadow and AO passes are counted), aimed at desktop GPUs. On slower GPUs the quality level steps down by itself; Medium and Low drop AO, streaks, reflections and shadows.
 
 ```
 src/
-  core/     utils · textures · materials · neon · windows · facade · prefabs
+  core/     utils · textures · materials · neon · windows · facade · prefabs · props3d
   world/    layout · ground · sky · heroTower · ramen · megablock · ledScreen
             neighbors · vehicles · district · props · figures · signs
   fx/       post · atmosphere · hologram

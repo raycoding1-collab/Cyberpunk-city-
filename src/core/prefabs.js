@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { T, U, RNG, roundRectShape, Batch } from './utils.js';
 import { M, glow } from './materials.js';
 import { drawCanvas } from './textures.js';
+export { acUnit, plant, laundryLine, futon, potted } from './props3d.js';
 
 /* =================================================================== */
 /*  Designed props. Each is modelled once as a multi-material Prefab   */
@@ -114,69 +115,7 @@ function fanGrilleTexture() {
   return _fanTex;
 }
 
-/* --------------------------- AC condenser ------------------------------ */
-let _ac;
-export function acUnit() {
-  if (_ac) return _ac;
-  const p = new Prefab('ac');
-  const body = new THREE.MeshStandardMaterial({ color: 0xcfc9b6, roughness: 0.55, metalness: 0.1 });
-  const grime = new THREE.MeshStandardMaterial({ color: 0x8e8878, roughness: 0.7 });
-  const grille = new THREE.MeshStandardMaterial({ map: fanGrilleTexture(), alphaTest: 0.4, color: 0x2a2a2a, roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide });
-  const W = 0.82, H = 0.58, D = 0.3;
-  p.add(new THREE.BoxGeometry(W, H, D), body, T(0, H / 2, 0));
-  p.add(new THREE.BoxGeometry(W + 0.02, 0.03, D + 0.02), grime, T(0, H + 0.005, 0));
-  // fan recess + blades + grille
-  p.add(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 28), M.metalBlack, T(-0.14, H / 2, D / 2 + 0.001, Math.PI / 2, 0, 0));
-  const blade = new THREE.Shape(); blade.moveTo(0, 0); blade.quadraticCurveTo(0.12, 0.05, 0.18, 0.02); blade.quadraticCurveTo(0.1, -0.04, 0, 0);
-  const bg = new THREE.ExtrudeGeometry(blade, { depth: 0.006, bevelEnabled: false });
-  for (let i = 0; i < 3; i++) p.add(bg, M.plasticGrey, T(-0.14, H / 2, D / 2 + 0.012, 0, 0, (i / 3) * Math.PI * 2 + 0.4));
-  p.add(new THREE.CircleGeometry(0.215, 32), grille, T(-0.14, H / 2, D / 2 + 0.024));
-  // service panel & louvres
-  p.add(new THREE.BoxGeometry(0.22, 0.42, 0.02), grime, T(0.27, H / 2, D / 2 + 0.008));
-  for (let i = 0; i < 6; i++) p.add(new THREE.BoxGeometry(0.2, 0.012, 0.03), body, T(0.27, 0.12 + i * 0.06, D / 2 + 0.018, -0.5, 0, 0));
-  // wall brackets
-  for (const sx of [-0.3, 0.3]) {
-    p.add(new THREE.BoxGeometry(0.04, 0.04, 0.55), M.galv, T(sx, -0.02, -0.1));
-    p.add(new THREE.BoxGeometry(0.04, 0.5, 0.04), M.galv, T(sx, -0.02, -0.37, 0, 0, 0));
-    p.add(new THREE.BoxGeometry(0.03, 0.03, 0.62), M.galv, T(sx, -0.2, -0.22, -0.72, 0, 0));
-  }
-  // insulated refrigerant lines + drain hose into the wall
-  const ins = new THREE.MeshStandardMaterial({ color: 0xe8e6de, roughness: 0.8 });
-  const line = new THREE.CatmullRomCurve3([new THREE.Vector3(W / 2, 0.2, 0), new THREE.Vector3(W / 2 + 0.12, 0.25, -0.05), new THREE.Vector3(W / 2 + 0.14, 0.45, -0.3), new THREE.Vector3(W / 2 + 0.14, 0.62, -0.4)]);
-  p.add(new THREE.TubeGeometry(line, 10, 0.028, 6), ins);
-  const drain = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.3, 0.02, 0.05), new THREE.Vector3(-0.32, -0.2, 0.08), new THREE.Vector3(-0.25, -0.5, 0.0)]);
-  p.add(new THREE.TubeGeometry(drain, 8, 0.012, 5), M.plasticGrey);
-  _ac = p;
-  return p;
-}
-
-/* ----------------------------- Potted plant ----------------------------- */
-export function plant(batch, matrix, rng, { size = 1, pot = 'terracotta' } = {}) {
-  const leaves = leafMaterials();
-  const potMat = pot === 'terracotta' ? M.terracotta : pot === 'white' ? M.plasticWhite : M.plasticBlack;
-  const pr = 0.13 * size, ph = 0.24 * size;
-  batch.add(new THREE.CylinderGeometry(pr, pr * 0.78, ph, 14), potMat, new THREE.Matrix4().multiplyMatrices(matrix, T(0, ph / 2, 0)));
-  batch.add(new THREE.CylinderGeometry(pr * 0.94, pr * 0.94, 0.01, 14), M.soil, new THREE.Matrix4().multiplyMatrices(matrix, T(0, ph - 0.02, 0)));
-  const lm = leaves[rng.int(0, 1)];
-  const s = (0.45 + rng.range(0, 0.35)) * size;
-  for (let i = 0; i < 3; i++) {
-    const g = new THREE.PlaneGeometry(s, s);
-    batch.add(g, lm, new THREE.Matrix4().multiplyMatrices(matrix, T(0, ph + s * 0.42, 0, rng.range(-0.15, 0.15), (i / 3) * Math.PI + rng.range(0, 0.4), 0)));
-  }
-}
-
-/* ------------------------------ Laundry -------------------------------- */
-export function laundryLine(batch, a, b, rng, drop = 0.55) {
-  const len = a.distanceTo(b);
-  batch.rod(M.galv, 0.012, a, b, 6);
-  const g = new THREE.PlaneGeometry(len * 0.92, drop);
-  const uv = g.attributes.uv;
-  const off = rng.range(0, 0.7), span = Math.min(1, len / 4);
-  for (let i = 0; i < uv.count; i++) uv.setX(i, off + uv.getX(i) * span * 0.3);
-  const mid = new THREE.Vector3().lerpVectors(a, b, 0.5);
-  const ang = Math.atan2(b.z - a.z, b.x - a.x);
-  batch.add(g, laundryMaterial(), T(mid.x, mid.y - drop / 2 - 0.02, mid.z, 0, -ang, 0));
-}
+/* AC condensers, plants and laundry live in props3d.js (re-exported below) */
 
 /* ----------------------------- Satellite dish -------------------------- */
 let _dish;
@@ -197,45 +136,63 @@ export function dish() {
 /* ------------------------------- Lantern ------------------------------- */
 const lanternMats = new Map();
 export function lanternMaterial(text = 'ラーメン', color = '#c8141e', glowI = 2.4) {
-  const key = text + color;
+  const key = text + color + glowI;
   if (lanternMats.has(key)) return lanternMats.get(key);
-  const t = drawCanvas(512, 512, (x) => {
+  const light = color === '#e8e2d0' || color === '#f2ead8';
+  const paint = (x, glowPass) => {
+    // washi paper: fibres, a warmer belly, darker toward the caps, bamboo rib shadows
     const g = x.createLinearGradient(0, 0, 512, 0);
-    g.addColorStop(0, '#3a0406'); g.addColorStop(0.25, color); g.addColorStop(0.5, '#ff4a3a'); g.addColorStop(0.75, color); g.addColorStop(1, '#3a0406');
+    const base = color;
+    g.addColorStop(0, '#2a0204'); g.addColorStop(0.18, base); g.addColorStop(0.5, light ? '#fffaf0' : '#ff5a40'); g.addColorStop(0.82, base); g.addColorStop(1, '#2a0204');
     x.fillStyle = g; x.fillRect(0, 0, 512, 512);
-    for (let y = 0; y < 512; y += 22) { x.fillStyle = 'rgba(40,0,0,0.35)'; x.fillRect(0, y, 512, 3); } // bamboo ribs
-    x.fillStyle = '#120000'; x.font = 'bold 92px "IPAGothic", "Yu Gothic", "Hiragino Sans", sans-serif'; x.textAlign = 'center';
+    const v = x.createLinearGradient(0, 0, 0, 512); v.addColorStop(0, 'rgba(0,0,0,0.55)'); v.addColorStop(0.18, 'rgba(0,0,0,0)'); v.addColorStop(0.82, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.6)');
+    x.fillStyle = v; x.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(${light ? '120,100,70' : '60,0,0'},${Math.random() * 0.08})`; x.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 7, 1); }
+    for (let y = 0; y < 512; y += 23) { x.fillStyle = 'rgba(30,0,0,0.42)'; x.fillRect(0, y, 512, 3); }
+    x.fillStyle = glowPass ? 'rgba(0,0,0,0.92)' : '#120000';
+    x.font = `bold 96px "IPAMincho", "Noto Serif CJK JP", "Yu Mincho", serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
     const chars = [...text];
-    chars.forEach((c, i) => x.fillText(c, 256, 120 + i * (330 / Math.max(1, chars.length - 1)) * 0.95));
-  });
-  const m = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: glowI, roughness: 0.6, side: THREE.DoubleSide });
+    const step = Math.min(118, 360 / Math.max(1, chars.length));
+    chars.forEach((c, i) => x.fillText(c, 256, 256 - ((chars.length - 1) * step) / 2 + i * step));
+  };
+  const t = drawCanvas(512, 512, (x) => paint(x, false));
+  const te = drawCanvas(512, 512, (x) => paint(x, true));
+  const m = new THREE.MeshStandardMaterial({ map: t, emissiveMap: te, emissive: 0xffffff, emissiveIntensity: glowI, roughness: 0.75, side: THREE.DoubleSide });
   m.userData.noShadow = true;
   lanternMats.set(key, m);
   return m;
 }
 
 export function lantern(group, x, y, z, { r = 0.3, h = 0.85, text = 'ラーメン', color = '#c8141e', glowI = 2.4, swing = 0.04 } = {}) {
+  const ribs = Math.max(10, Math.round(h * 30));
   const pts = [];
-  for (let i = 0; i <= 16; i++) {
-    const t = i / 16;
-    pts.push(new THREE.Vector2(r * (0.72 + 0.28 * Math.sin(Math.PI * t)) * (1 + 0.03 * Math.cos(t * Math.PI * 22)), (t - 0.5) * h));
+  const N = ribs * 6;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const env = r * (0.7 + 0.3 * Math.sin(Math.PI * t));
+    const sagK = 1 - 0.022 * (1 - Math.pow(Math.abs(Math.cos(Math.PI * t * ribs)), 4));
+    pts.push(new THREE.Vector2(env * sagK, (t - 0.5) * h));
   }
-  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 32), lanternMaterial(text, color, glowI));
+  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 36), lanternMaterial(text, color, glowI));
   const pivot = new THREE.Group();
-  pivot.position.set(x, y + h / 2 + 0.12, z);
-  body.position.y = -h / 2 - 0.12;
+  pivot.position.set(x, y + h / 2 + 0.16, z);
+  body.position.y = -h / 2 - 0.16;
   body.rotation.y = Math.PI / 2;
   pivot.add(body);
-  const capMat = M.metalBlack;
+  const lacquer = new THREE.MeshPhysicalMaterial({ color: 0x0c0a09, roughness: 0.25, clearcoat: 0.8 });
+  const capR = r * 0.72;
   for (const s of [-1, 1]) {
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.74, r * 0.74, 0.06, 24), capMat);
-    cap.position.y = body.position.y + s * (h / 2 + 0.02);
+    const cp = [new THREE.Vector2(capR * 0.55, 0), new THREE.Vector2(capR * 1.02, 0), new THREE.Vector2(capR * 1.04, 0.012), new THREE.Vector2(capR * 0.98, 0.05), new THREE.Vector2(capR * 0.6, 0.065), new THREE.Vector2(capR * 0.5, 0.075)];
+    const cap = new THREE.Mesh(new THREE.LatheGeometry(cp, 28), lacquer);
+    cap.position.y = body.position.y + s * (h / 2 - 0.01);
+    if (s < 0) cap.rotation.x = Math.PI;
     pivot.add(cap);
   }
-  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 6, 12), M.brass);
-  hook.position.y = -0.06; pivot.add(hook);
-  const tassel = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 8), new THREE.MeshStandardMaterial({ color: 0x0c0c0c, roughness: 0.9 }));
-  tassel.position.y = body.position.y - h / 2 - 0.15; tassel.rotation.x = Math.PI; pivot.add(tassel);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 6, 14), M.brass); hook.position.y = -0.07; pivot.add(hook);
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.12, 5), M.plasticBlack); cord.position.y = -0.0; pivot.add(cord);
+  const knot = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), lacquer); knot.position.y = body.position.y - h / 2 - 0.09; pivot.add(knot);
+  const tassel = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.16, 10, 1, true), new THREE.MeshStandardMaterial({ color: 0x150b08, roughness: 0.95, side: THREE.DoubleSide }));
+  tassel.position.y = knot.position.y - 0.08; pivot.add(tassel);
   group.add(pivot);
   const seed = x * 3.1 + z;
   return (t) => { pivot.rotation.z = Math.sin(t * 1.3 + seed) * swing; pivot.rotation.x = Math.sin(t * 0.9 + seed * 2) * swing * 0.6; };

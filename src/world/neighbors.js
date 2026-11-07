@@ -6,7 +6,7 @@ import { drawCanvas, perforated, graffiti } from '../core/textures.js';
 import { Frame, wallWithOpenings, wallWithWindows } from '../core/facade.js';
 import { WIN } from '../core/windows.js';
 import { neonSign } from '../core/neon.js';
-import { acUnit, plant, laundryLine, dish, waterTank, crateStack, trashBag, bicycle, lantern, swayMaterial } from '../core/prefabs.js';
+import { acUnit, plant, laundryLine, dish, waterTank, crateStack, trashBag, bicycle, lantern, swayMaterial, futon } from '../core/prefabs.js';
 import { lightBox, faceMaterial, chaser, rectPerimeter, JP, JPM, LAT, vtext, rr } from './signs.js';
 import { parkedCar } from './vehicles.js';
 import { figure } from './figures.js';
@@ -357,7 +357,7 @@ function buildJunk(world, B, root, rng) {
     for (let u = 0.05; u <= len; u += 0.12) F.cyl(B, M.galv, 0.012, 1.0, u, y + 0.62, 1.15, 'v', 4);
     F.cyl(B, M.galv, 0.025, len, 4.5, y + 1.12, 1.15, 'u', 6);
     F.box(B, M.glassFrost, 4.5, y + 1.6, 0.6, 0.03, 3.0, 1.2);
-    ac.place(B, F.m(2.0 + f * 4.0, y + 0.12, 0.5));
+    ac.place(B, F.m(2.0 + f * 4.0, y + 0.12, 0.5), { floor: true });
     laundryLine(B, F.p(0.4, y + 2.4, 0.9), F.p(len - 0.4, y + 2.4, 0.9), rng, 0.6);
     plant(B, F.m(7.6, y + 0.12, 0.8), rng, { size: 1.2 });
   }
@@ -444,9 +444,10 @@ function buildRobata(world, B, root, rng) {
     for (let k = 1; k < 5; k++) F.box(B, M.glassFrost, k * 4.5 + 0.1, y + 1.5, 0.65, 0.04, 2.6, 1.25); // fire partitions
     for (let k = 0; k < 5; k++) {
       const r = rng.next();
-      if (r < 0.6) ac.place(B, F.m(0.9 + k * 4.5 + rng.range(0, 2.4), y + 0.16, 0.8));
+      if (r < 0.6) ac.place(B, F.m(0.9 + k * 4.5 + rng.range(0, 2.4), y + 0.16, 0.8), { floor: true });
       if (rng.chance(0.55)) laundryLine(B, F.p(0.3 + k * 4.5, y + 2.4, 0.9), F.p(4.2 + k * 4.5, y + 2.4, 0.9), rng, rng.range(0.5, 0.8));
       if (rng.chance(0.5)) plant(B, F.m(3.8 + k * 4.5, y + 1.2, 1.27), rng, { size: 0.7 });
+      if (rng.chance(0.25)) futon(B, F.m(1.6 + k * 4.5, y + 1.25, 1.27), rng, { width: 1.0 });
     }
   }
   // mansion name plate + rooftop billboard frame (empty, rusted: "広告募集")
@@ -544,7 +545,7 @@ function buildArcade(world, B, root, rng) {
   const gg = new THREE.Mesh(new THREE.PlaneGeometry(9, 4.5), new THREE.MeshStandardMaterial({ map: gt, transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
   gg.position.set(16.5, 2.4, 9.02); root.add(gg);
   const ac = acUnit();
-  for (let i = 0; i < 5; i++) ac.place(B, N.m(2 + i * 2.6, 6 + (i % 2) * 2.2, 0.0));
+  for (let i = 0; i < 5; i++) ac.place(B, N.m(2 + i * 2.6, 6 + (i % 2) * 2.2, 0.38));
   for (const u of [1.2, 9.5, 14.0]) N.cyl(B, M.plasticGrey, 0.06, H, u, H / 2, 0.1, 'v');
   roofKit(world, B, root, rng, 7.5, 24, 9, 40, H, { skylights: true });
   // rooftop sign readable from the air
@@ -605,7 +606,7 @@ function buildRearBlock(world, B, root, rng) {
   const face = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 1.58), faceMaterial(vendingFront(41, 1), 1.3));
   face.applyMatrix4(F.m(4.6, 1.21, 0.815)); root.add(face);
   const ac = acUnit();
-  for (let i = 0; i < 5; i++) ac.place(B, F.m(1.2 + (i % 2) * 3.4, 4.2 + i * 2.9, 0.0));
+  for (let i = 0; i < 5; i++) ac.place(B, F.m(1.2 + (i % 2) * 3.4, 4.2 + i * 2.9, 0.38));
   roofKit(world, B, root, rng, x0, x1, z0, z1, H);
   const gt = graffiti({ seed: 17, words: ['KOI', 'LOVE', '7区'] });
   const gm = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.2), new THREE.MeshStandardMaterial({ map: gt, transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));

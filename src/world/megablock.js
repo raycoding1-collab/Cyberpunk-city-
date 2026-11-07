@@ -100,7 +100,7 @@ export function buildMegablock(world) {
         }
         // life on the ledges
         const roll = rng.next();
-        if (roll < 0.22) ac.place(B, F.m(u + 0.7 + rng.range(0, bw - 1.6), y + 1.0, -0.4).multiply(T(0, 0, 0, 0, 0, 0, 0.9)));
+        if (roll < 0.22) ac.place(B, F.m(u + 0.7 + rng.range(0, bw - 1.6), y + 1.0, -0.4).multiply(T(0, 0, 0, 0, 0, 0, 0.9)), { floor: true, lod: y > 30 });
         else if (roll < 0.3) for (let k = 0; k < rng.int(2, 4); k++) plant(B, F.m(u + 0.6 + k * 0.5, y + 1.0, -0.35), rng, { size: 0.8 });
         else if (roll < 0.34) dish().place(B, F.m(u + bw - 0.6, y + 1.3, -0.3).multiply(T(0, 0, 0, 0, 0.5, 0)));
         else if (roll < 0.38) laundryLine(B, F.p(u + 0.4, y + 3.1, -0.15), F.p(u + bw - 0.2, y + 3.1, -0.15), rng, 0.6);
