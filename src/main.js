@@ -211,6 +211,17 @@ async function boot() {
         post.render();
         return renderer.domElement.toDataURL('image/jpeg', quality);
       },
+      /** inspection camera: any position/target/fov at world time wt (used by tools/views.mjs) */
+      shoot({ p, t: tg, fov = 50, wt = 20 }, quality = 0.92) {
+        U.time.value = wt;
+        for (const u of world.updaters) u(wt, 1 / fps);
+        camera.position.set(...p);
+        if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+        camera.lookAt(...tg);
+        renderer.info.reset();
+        post.render();
+        return renderer.domElement.toDataURL('image/jpeg', quality);
+      },
     };
     window.__captureReady = true;
     return;
