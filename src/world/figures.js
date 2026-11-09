@@ -174,12 +174,14 @@ const PALETTE = {
 };
 
 /* -------------------------------- figure -------------------------------- */
+const BSPHERE = new THREE.Sphere(new THREE.Vector3(0, 0.95, 0.05), 1.15);   // covers a full stride and raised arms
 const BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'uaL', 'faL', 'handL', 'uaR', 'faR', 'handR', 'thL', 'shL', 'footL', 'thR', 'shR', 'footR'];
 const BI = Object.fromEntries(BONES.map((b, i) => [b, i]));
 const PARENT = { spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck', uaL: 'chest', faL: 'uaL', handL: 'faL', uaR: 'chest', faR: 'uaR', handR: 'faR', thL: 'hips', shL: 'thL', footL: 'shL', thR: 'hips', shR: 'thR', footR: 'shR' };
 
-export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing', coat, hair, seed = 1, hood = false, umbrella = null, scale = 1, outfit: forceOutfit, prop } = {}) {
+export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing', coat, hair, seed = 1, hood = false, umbrella = null, scale = 1, outfit: forceOutfit, prop, hi = false } = {}) {
   const r = new RNG(seed * 7919 + 13);
+  const q = hi ? 1 : 1.75;          // mesh resolution: close-up figures full, background figures coarser
   const chef = pose === 'chef', seated = pose === 'seated';
   const fem = r.chance(0.48);
   const sw = fem ? r.range(0.86, 0.94) : r.range(0.98, 1.08);   // shoulder width
@@ -343,7 +345,7 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
     }
     return l;
   };
-  geos.garment.push(polygonize(garmentF, [-0.44, gb, -0.27], [0.44, hooded ? 1.76 : 1.56, 0.27], 0.0125, garmentLabel, garmentColor));
+  geos.garment.push(polygonize(garmentF, [-0.44, gb, -0.27], [0.44, hooded ? 1.76 : 1.56, 0.27], 0.0125 * q, garmentLabel, garmentColor));
 
   /* -------------------------- lower: trousers / skirt ------------------------- */
   const legSet = [parts[0], limbs.thL, limbs.thR, limbs.snL, limbs.snR, limbs.cfL, limbs.cfR];
@@ -358,11 +360,11 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
       d = smax(d, y - 1.04, 0.006);
       return d;
     };
-    geos.lower.push(polygonize(trousersF, [-0.25, 0.05, -0.17], [0.25, 1.06, 0.17], 0.013, labelFrom(legSet), colorFlat(pantsRGB, 0.15)));
+    geos.lower.push(polygonize(trousersF, [-0.25, 0.05, -0.17], [0.25, 1.06, 0.17], 0.013 * q, labelFrom(legSet), colorFlat(pantsRGB, 0.15)));
   } else {
     const tightsF = (x, y, z) => smax(smax(legU(x, y, z) - 0.002, 0.08 - y, 0.004), y - 0.85, 0.004);
     const tights = r.chance(0.6) ? [0.03, 0.028, 0.03] : skin;
-    geos.lower.push(polygonize(tightsF, [-0.22, 0.06, -0.15], [0.22, 0.87, 0.15], 0.012, labelFrom(legSet), colorFlat(tights, 0.05)));
+    geos.lower.push(polygonize(tightsF, [-0.22, 0.06, -0.15], [0.22, 0.87, 0.15], 0.012 * q, labelFrom(legSet), colorFlat(tights, 0.05)));
   }
 
   /* --------------------------------- head --------------------------------- */
@@ -401,7 +403,7 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
     return c.map((v) => v * ao);
   };
   const headLabel = labelFrom([{ f: headParts[0], b: 'head' }, { f: headParts[1], b: 'head' }, parts[4], parts[2]]);
-  geos.skin.push(polygonize(headF, [-0.105, 1.41, -0.115], [0.105, 1.72, 0.125], 0.0045, headLabel, skinColor));
+  geos.skin.push(polygonize(headF, [-0.105, 1.41, -0.115], [0.105, 1.72, 0.125], 0.0045 * q, headLabel, skinColor));
 
   /* ---------------------------------- hair ---------------------------------- */
   const style = chef ? 'band' : hooded ? 'under' : r.pick(fem ? ['bob', 'long', 'pony', 'bun', 'long', 'beanie'] : ['short', 'short', 'crop', 'cap', 'beanie', 'pony', 'short']);
@@ -458,7 +460,7 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
       const s = 1 + (vnoise(x * 200, y * 60, z * 200) - 0.5) * (hatRGB ? 0.1 : 0.5);
       return base.map((v) => v * s * ao);
     };
-    geos.hair.push(polygonize(hairF, [-0.115, style === 'long' ? 1.28 : 1.4, -0.2], [0.115, 1.73, 0.18], 0.0045, () => [BI.head, BI.head, 0], hc));
+    geos.hair.push(polygonize(hairF, [-0.115, style === 'long' ? 1.28 : 1.4, -0.2], [0.115, 1.73, 0.18], 0.0045 * q, () => [BI.head, BI.head, 0], hc));
   }
 
   /* ---------------------------------- hands ---------------------------------- */
@@ -494,7 +496,7 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
       return smax(d, y - (w[1] + 0.05), 0.005);
     };
     const lab = labelFrom([{ f: palm, b: 'hand' + k }, { f: fa, b: 'fa' + k }]);
-    geos.skin.push(polygonize(handF, [w[0] - 0.06, w[1] - 0.2, w[2] - 0.06], [w[0] + 0.06, w[1] + 0.06, w[2] + 0.08], 0.0036, lab, (x, y, z, nx, ny, nz, ao) => skin.map((v) => v * ao)));
+    geos.skin.push(polygonize(handF, [w[0] - 0.06, w[1] - 0.2, w[2] - 0.06], [w[0] + 0.06, w[1] + 0.06, w[2] + 0.08], 0.0036 * q, lab, (x, y, z, nx, ny, nz, ao) => skin.map((v) => v * ao)));
   }
 
   /* ---------------------------------- shoes ---------------------------------- */
@@ -512,7 +514,7 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
       return d;
     };
     const lab = labelFrom([{ f: body, b: 'foot' + k }, { f: limbs['sn' + k].f, b: 'sh' + k }]);
-    geos.shoe.push(polygonize(shoeF, [a[0] - 0.07, -0.01, a[2] - 0.1], [a[0] + 0.07, shoeKind === 'boot' ? 0.22 : 0.14, a[2] + 0.23], 0.0065, lab,
+    geos.shoe.push(polygonize(shoeF, [a[0] - 0.07, -0.01, a[2] - 0.1], [a[0] + 0.07, shoeKind === 'boot' ? 0.22 : 0.14, a[2] + 0.23], 0.0065 * q, lab,
       (x, y, z, nx, ny, nz, ao) => (y < 0.018 ? sole : upper).map((v) => v * ao)));
   }
 
@@ -539,7 +541,7 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
     if (!list.length) return;
     const g = list.length > 1 ? mergeGeos(list) : list[0];
     const m = new THREE.SkinnedMesh(g, getMat(matKey));
-    m.castShadow = shadow; m.frustumCulled = false;
+    m.castShadow = shadow; m.boundingSphere = BSPHERE.clone();
     rig.add(m); m.updateMatrixWorld(true); m.bind(skeleton); meshes.push(m);
   };
   add(geos.garment, chef ? 'fabric' : fabricKind);
@@ -571,8 +573,8 @@ export function figure(parent, { x = 0, y = 0, z = 0, ry = 0, pose = 'standing',
   }
   if (!chef && r.chance(0.3) && style !== 'band') {   // face mask
     const maskF = (x, y, z) => smax(smax(headF(x, y, z) - 0.005, Math.max(y - 1.585, 1.508 - y), 0.004), 0.02 - z, 0.01);
-    const mg = polygonize(maskF, [-0.1, 1.49, 0.0], [0.1, 1.6, 0.12], 0.0045, () => [BI.head, BI.head, 0], (x, y, z, nx, ny, nz, ao) => [0.82, 0.82, 0.8].map((v) => v * ao));
-    const m = new THREE.SkinnedMesh(mg, getMat('fabric')); m.frustumCulled = false; rig.add(m); m.updateMatrixWorld(true); m.bind(skeleton);
+    const mg = polygonize(maskF, [-0.1, 1.49, 0.0], [0.1, 1.6, 0.12], 0.0045 * q, () => [BI.head, BI.head, 0], (x, y, z, nx, ny, nz, ao) => [0.82, 0.82, 0.8].map((v) => v * ao));
+    const m = new THREE.SkinnedMesh(mg, getMat('fabric')); m.boundingSphere = BSPHERE.clone(); rig.add(m); m.updateMatrixWorld(true); m.bind(skeleton);
   }
 
   /* ----------------------------------- pose ----------------------------------- */

@@ -137,9 +137,9 @@ export function buildRamen(world, root) {
   B.add(new THREE.BoxGeometry(0.03, 0.02, 8.0), glow(0xffc27a, 4), T(10.5, SF + 1.31, -1.65));
 
   /* --------------------------- people -------------------------------- */
-  figure(root, { x: 9.42, y: SF + 0.72, z: -3.1, ry: Math.PI / 2, pose: 'seated', coat: 0x1d2433, hair: 0x0a0a0a, seed: 3 });
-  figure(root, { x: 9.42, y: SF + 0.72, z: -0.25, ry: Math.PI / 2, pose: 'seated', coat: 0x4a1f2e, hair: 0x2a1a10, seed: 5, hood: true });
-  const chef = figure(root, { x: 11.35, y: SF, z: -2.4, ry: -Math.PI / 2, pose: 'chef', coat: 0xe8e4da, hair: 0x101010, seed: 9 });
+  figure(root, { x: 9.42, y: SF + 0.72, z: -3.1, ry: Math.PI / 2, pose: 'seated', coat: 0x1d2433, hair: 0x0a0a0a, seed: 3 , hi: true });
+  figure(root, { x: 9.42, y: SF + 0.72, z: -0.25, ry: Math.PI / 2, pose: 'seated', coat: 0x4a1f2e, hair: 0x2a1a10, seed: 5, hood: true , hi: true });
+  const chef = figure(root, { x: 11.35, y: SF, z: -2.4, ry: -Math.PI / 2, pose: 'chef', coat: 0xe8e4da, hair: 0x101010, seed: 9 , hi: true });
   updaters.push((t) => { chef.rotation.y = -Math.PI / 2 + Math.sin(t * 0.6) * 0.35; chef.position.z = -2.4 + Math.sin(t * 0.23) * 0.9; });
 
   /* -------------------------- shop front ----------------------------- */

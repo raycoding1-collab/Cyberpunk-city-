@@ -279,7 +279,7 @@ function people(world, root) {
     { path: [[-6.8, 20], [-6.8, -6]], speed: 0.8, umbrella: 0xffffff, coat: 0x161616, seed: 105 },
   ];
   walkers.forEach((w, i) => {
-    const f = figure(root, { x: w.path[0][0], y: 0.18, z: w.path[0][1], pose: 'standing', coat: w.coat, umbrella: w.umbrella, seed: w.seed, hood: w.hood });
+    const f = figure(root, { x: w.path[0][0], y: 0.18, z: w.path[0][1], pose: 'standing', coat: w.coat, umbrella: w.umbrella, seed: w.seed, hood: w.hood, hi: w.seed === 103 });
     const a = new THREE.Vector3(w.path[0][0], 0, w.path[0][1]), b = new THREE.Vector3(w.path[1][0], 0, w.path[1][1]);
     const len = a.distanceTo(b);
     const dir = new THREE.Vector3().subVectors(b, a).normalize();
@@ -297,10 +297,10 @@ function people(world, root) {
     });
   });
   // still figures: a couple under the ramen awning, someone at the vending machines, a smoker
-  figure(root, { x: 6.9, y: 0.18, z: -5.0, ry: -Math.PI / 2 + 0.4, pose: 'standing', coat: 0x101826, seed: 201, prop: 'phone' });
-  figure(root, { x: 6.75, y: 0.18, z: -5.6, ry: -Math.PI / 2 - 0.2, pose: 'standing', coat: 0x4a1a2a, seed: 202, hood: true, umbrella: 0xb46aff });
+  figure(root, { x: 6.9, y: 0.18, z: -5.0, ry: -Math.PI / 2 + 0.4, pose: 'standing', coat: 0x101826, seed: 201, prop: 'phone', hi: true });
+  figure(root, { x: 6.75, y: 0.18, z: -5.6, ry: -Math.PI / 2 - 0.2, pose: 'standing', coat: 0x4a1a2a, seed: 202, hood: true, umbrella: 0xb46aff, hi: true });
   figure(root, { x: -6.6, y: 0.18, z: 6.4, ry: -Math.PI / 2, pose: 'standing', coat: 0x262a20, seed: 203 });
-  const smoker = figure(root, { x: 7.1, y: 0.18, z: 6.0, ry: -2.2, pose: 'standing', coat: 0x15151a, seed: 204, hood: true, prop: 'cigarette' });
+  const smoker = figure(root, { x: 7.1, y: 0.18, z: 6.0, ry: -2.2, pose: 'standing', coat: 0x15151a, seed: 204, hood: true, prop: 'cigarette', hi: true });
   const ember = smoker.userData.ember;
   if (ember) world.updaters.push((t) => { ember.scale.setScalar(0.8 + 0.5 * Math.sin(t * 3) ** 2); });
   world.steamSources.push({ p: new THREE.Vector3(7.0, 1.72, 6.15), rate: 0.5, size: 0.22, rise: 0.25, color: 0xcfcfdf, spread: 0.05, life: 3.0, max: 2.0 });
