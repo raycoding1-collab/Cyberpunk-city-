@@ -1,9 +1,11 @@
 // Render the cinematic frame-by-frame: node tools/film.mjs <outDir> <start> <end> [w] [h] [fps]
 // RESUME=1 skips frames already on disk (the simulation is still stepped through them, so a
 // shard restarted mid-shot continues seamlessly). Start shards on shot boundaries.
+// If <outDir>/.claims exists, frames are claimed before rendering, so several shards can run the
+// same shot range at once and split its frames between them (stale claims expire after 20 min).
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, openSync, closeSync, statSync, utimesSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
@@ -21,10 +23,17 @@ await page.evaluate((i) => { window.__film.render(i); window.__film.render(i); }
 const t0 = Date.now();
 const list = process.env.FRAMES ? process.env.FRAMES.split(',').map(Number) : null;
 const resume = !!process.env.RESUME;
+const claims = existsSync(`${outDir}/.claims`) ? `${outDir}/.claims` : null;
+const claim = (i) => {
+  const c = `${claims}/${i}`;
+  try { closeSync(openSync(c, 'wx')); return true; } catch {}
+  try { if (Date.now() - statSync(c).mtimeMs > 20 * 60e3) { utimesSync(c, new Date(), new Date()); return true; } } catch {}
+  return false;
+};
 for (let i = a; i <= b; i++) {
   if (list && !list.includes(i)) continue;
   const file = `${outDir}/f${String(i).padStart(5, '0')}.jpg`;
-  if (resume && existsSync(file)) { await page.evaluate((k) => window.__film.step(k), i); continue; }
+  if ((resume && existsSync(file)) || (claims && !claim(i))) { await page.evaluate((k) => window.__film.step(k), i); continue; }
   const url = await page.evaluate((k) => window.__film.render(k), i);
   writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
   if ((i - a) % 12 === 0) console.log(`frame ${i}  ${((Date.now() - t0) / 1000 / (i - a + 1)).toFixed(2)} s/frame`);
