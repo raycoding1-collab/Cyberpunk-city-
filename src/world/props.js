@@ -297,11 +297,11 @@ function people(world, root) {
     });
   });
   // still figures: a couple under the ramen awning, someone at the vending machines, a smoker
-  figure(root, { x: 6.9, y: 0.18, z: -5.0, ry: -Math.PI / 2 + 0.4, pose: 'standing', coat: 0x101826, seed: 201 });
+  figure(root, { x: 6.9, y: 0.18, z: -5.0, ry: -Math.PI / 2 + 0.4, pose: 'standing', coat: 0x101826, seed: 201, prop: 'phone' });
   figure(root, { x: 6.75, y: 0.18, z: -5.6, ry: -Math.PI / 2 - 0.2, pose: 'standing', coat: 0x4a1a2a, seed: 202, hood: true, umbrella: 0xb46aff });
   figure(root, { x: -6.6, y: 0.18, z: 6.4, ry: -Math.PI / 2, pose: 'standing', coat: 0x262a20, seed: 203 });
-  const smoker = figure(root, { x: 7.1, y: 0.18, z: 6.0, ry: -2.2, pose: 'standing', coat: 0x15151a, seed: 204, hood: true });
-  const ember = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 4), glow(0xff5a1a, 18)); ember.position.set(-0.12, 1.6, 0.2); smoker.add(ember);
-  world.updaters.push((t) => { ember.scale.setScalar(0.8 + 0.4 * Math.sin(t * 3) ** 2); });
-  world.steamSources.push({ p: new THREE.Vector3(7.0, 1.75, 6.2), rate: 0.5, size: 0.25, rise: 0.25, color: 0xcfcfdf, spread: 0.05, life: 3.0, max: 2.0 });
+  const smoker = figure(root, { x: 7.1, y: 0.18, z: 6.0, ry: -2.2, pose: 'standing', coat: 0x15151a, seed: 204, hood: true, prop: 'cigarette' });
+  const ember = smoker.userData.ember;
+  if (ember) world.updaters.push((t) => { ember.scale.setScalar(0.8 + 0.5 * Math.sin(t * 3) ** 2); });
+  world.steamSources.push({ p: new THREE.Vector3(7.0, 1.72, 6.15), rate: 0.5, size: 0.22, rise: 0.25, color: 0xcfcfdf, spread: 0.05, life: 3.0, max: 2.0 });
 }

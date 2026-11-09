@@ -209,7 +209,7 @@ export function dropletNormalMap() {
     const ry = run ? r * 3.5 : r;
     for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
       const dx = (x - cx) / r, dy = (y - cy) / ry, d = dx * dx + dy * dy;
-      if (d < 1) { const xx = (x + S) % S, yy = (y + S) % S; h[yy * S + xx] = Math.max(h[yy * S + xx], Math.sqrt(1 - d)); }
+      if (d < 1) { const xx = (x + S) % S, yy = (y + S) % S; const cap = (1 - d) * (1 - d) * (0.6 + 0.4 * (r / 8.5)); h[yy * S + xx] = Math.max(h[yy * S + xx], cap); }   // shallow cap, no hard rim
     }
   }
   const c = document.createElement('canvas'); c.width = c.height = S;
@@ -217,7 +217,7 @@ export function dropletNormalMap() {
   for (let y = 0; y < S; y++) for (let xx = 0; xx < S; xx++) {
     const hx = h[y * S + ((xx + 1) % S)] - h[y * S + ((xx - 1 + S) % S)];
     const hy = h[((y + 1) % S) * S + xx] - h[((y - 1 + S) % S) * S + xx];
-    const n = new THREE.Vector3(-hx * 2.5, -hy * 2.5, 1).normalize();
+    const n = new THREE.Vector3(-hx * 1.4, -hy * 1.4, 1).normalize();
     const k = (y * S + xx) * 4;
     img.data[k] = (n.x * 0.5 + 0.5) * 255; img.data[k + 1] = (n.y * 0.5 + 0.5) * 255; img.data[k + 2] = (n.z * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
   }
@@ -229,7 +229,7 @@ export function dropletNormalMap() {
 }
 export function realGlass(params = {}, { droplets = false } = {}) {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.03, metalness: 0, transparent: true, premultipliedAlpha: true, depthWrite: false, ...params });
-  if (droplets) { m.normalMap = dropletNormalMap(); m.normalScale = new THREE.Vector2(0.12, 0.12); }
+  if (droplets) { m.normalMap = dropletNormalMap(); m.normalScale = new THREE.Vector2(0.07, 0.07); }
   m.userData.noWeather = true;
   m.userData.noShadow = true;
   m.onBeforeCompile = (sh) => {

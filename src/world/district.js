@@ -6,8 +6,8 @@ import { drawCanvas } from '../core/textures.js';
 import { Frame, wallWithOpenings, wallWithWindows } from '../core/facade.js';
 import { WIN } from '../core/windows.js';
 import { neonSign } from '../core/neon.js';
-import { acUnit, plant, lantern, futon, laundryLine } from '../core/prefabs.js';
-import { lightBox, faceMaterial, chaser, rectPerimeter, JP, JPM, LAT, vtext, rr } from './signs.js';
+import { acUnit, plant, lantern, futon, laundryLine, waterTank } from '../core/prefabs.js';
+import { lightBox, faceMaterial, chaser, rectPerimeter, JP, JPM, LAT, vtext, rr, projectingSign } from './signs.js';
 import { L } from './layout.js';
 
 /* =================================================================== */
@@ -26,6 +26,7 @@ export function buildDistrict(world) {
   buildSignals(world, B, root);
   buildNorthBlocks(world, B, root, rng);
   buildCrossStreetWalls(world, B, root, rng);
+  buildSouthEnd(world, B, root, rng);
   B.build(root);
   buildSkyline(world, root, rng);
   buildFiller(world, root, rng);
@@ -173,7 +174,38 @@ function buildSignals(world, B, root) {
  *           'balcony' – sliding doors behind balcony slabs with railings
  *           'hotel'   – small punched windows, alternating with AC sleeves
  */
-function tower(world, B, { x0, x1, z0, z1, h, mat, faces, floor = 3.4, lit = 0.45, ground = 4.5, bands = true, program = 'units', kind = 'res', seed = 1 }) {
+// external steel fire stair hung on the façade between u0 and u0 + 2.6
+function fireStair(B, F, u0, floors, floorH, h) {
+  const steel = M.metalDark, w = 2.6, out = 1.25;
+  for (const y of floors) {
+    F.box(B, steel, u0 + w / 2, y, out / 2 + 0.05, w, 0.06, out);                       // landing
+    F.box(B, steel, u0 + w / 2, y + 1.05, out + 0.05, w, 0.05, 0.05);                   // top rail
+    F.box(B, M.galv, u0 + w / 2, y + 0.55, out + 0.06, w, 0.9, 0.012, 0.5);             // mesh panel
+    for (const uu of [u0 + 0.03, u0 + w - 0.03]) F.box(B, steel, uu, y + floorH / 2, out + 0.05, 0.06, floorH, 0.06);
+    // two flights per storey, zig-zagging along the wall
+    for (const [a, dir] of [[0, 1], [1, -1]]) {
+      const run = w - 0.5, rise = floorH / 2;
+      const len = Math.hypot(run, rise), ang = Math.atan2(rise, run) * dir;
+      const cu = u0 + w / 2, cv = y + rise * (a + 0.5);
+      B.add(new THREE.BoxGeometry(len, 0.05, out * 0.46), steel, F.m(cu, cv, out * (a ? 0.27 : 0.75) + 0.05).multiply(T(0, 0, 0, 0, 0, ang)));
+      B.add(new THREE.BoxGeometry(len, 0.04, 0.04), steel, F.m(cu, cv + 0.9, out * (a ? 0.04 : 0.98) + 0.05).multiply(T(0, 0, 0, 0, 0, ang)));
+    }
+  }
+  F.box(B, steel, u0 + 0.03, h / 2, out + 0.05, 0.08, h, 0.08);
+}
+/**
+ * A building with a real façade: walls with openings, recessed framed windows,
+ * slab bands and per-building "programs" so no two blocks share a rhythm.
+ *  program: 'units'   – flats: kitchen window (grille) + living slider, some with enclosed balconies
+ *           'paired'  – paired narrow windows separated by solid piers
+ *           'ribbon'  – continuous strip windows under deep spandrels
+ *           'curtain' – glass curtain wall (office) with mullion fins and transoms
+ *           'balcony' – sliding doors behind balcony slabs with railings and partitions
+ *           'hotel'   – small punched windows, some with louvred vents
+ * Plus what real buildings carry: a steel fire stair, downpipes, projecting
+ * signs, roll shutters, and roof plant (stair house, water tank, antennas).
+ */
+function tower(world, B, { x0, x1, z0, z1, h, mat, faces, floor = 3.4, lit = 0.45, ground = 4.5, bands = true, program = 'units', kind = 'res', seed = 1, root = null, signs = 1, stair = null }) {
   const r = new RNG(Math.floor((x0 * 31 + z0 * 17 + h) * 13) + seed);
   const inset = 0.3;
   const fx0 = faces.includes('-x') ? x0 + inset : x0, fx1 = faces.includes('+x') ? x1 - inset : x1;
@@ -184,84 +216,135 @@ function tower(world, B, { x0, x1, z0, z1, h, mat, faces, floor = 3.4, lit = 0.4
   };
   const lens = { '+x': z1 - z0, '-x': z1 - z0, '+z': x1 - x0, '-z': x1 - x0 };
   const ac = acUnit();
-  for (const f of faces) {
+  const hasStair = stair !== null ? stair : program !== 'curtain' && h < 48 && r.chance(0.65);
+  faces.forEach((f, fi) => {
     const F = frames[f], len = lens[f];
     const wins = [];
     const floors = [];
     for (let y = ground; y + floor <= h - 0.6; y += floor) floors.push(y);
+    const stairHere = hasStair && fi === 0;
+    const uEnd = stairHere ? len - 2.9 : len;
     const unitW = program === 'units' ? r.range(5.4, 6.6) : program === 'paired' ? r.range(3.8, 4.6) : program === 'hotel' ? r.range(2.6, 3.2) : program === 'balcony' ? r.range(3.6, 4.4) : 3.0;
-    const nU = Math.max(1, Math.floor((len - 0.6) / unitW));
-    const pad = (len - nU * unitW) / 2;
-    floors.forEach((y, fi) => {
+    const nU = Math.max(1, Math.floor((uEnd - 0.6) / unitW));
+    const pad = (uEnd - nU * unitW) / 2;
+    const unitStyle = Array.from({ length: nU }, () => r.next());
+    floors.forEach((y, fl) => {
       const v = y;
       for (let k = 0; k < nU; k++) {
         const u0 = pad + k * unitW;
         const s = r.next();
         if (program === 'units') {
-          // kitchen (grille) | living slider | bath vent — mirrored every other unit
-          const mir = k % 2;
-          const kw = 0.9, lw = r.range(2.0, 2.6);
+          const mir = (k + (unitStyle[k] > 0.5 ? 1 : 0)) % 2;
+          const kw = unitStyle[k] > 0.7 ? 1.2 : 0.9, lw = 2.0 + unitStyle[k] * 0.7;
           const ku = mir ? u0 + unitW - 0.5 - kw : u0 + 0.5, lu = mir ? u0 + 0.6 : u0 + unitW - 0.6 - lw;
-          wins.push({ u: ku, v: v + 1.15, w: kw, h: 0.9, style: WIN.PLAIN, room: 2, grille: true, lit, kind });
-          wins.push({ u: lu, v: v + 0.55, w: lw, h: 1.75, style: WIN.SLIDER, lit, kind });
-          if (s < 0.35) F.box(B, M.galv, ku + kw + 0.35, v + 2.3, 0.04, 0.18, 0.18, 0.08);
+          wins.push({ u: ku, v: v + 1.15, w: kw, h: 0.9, style: WIN.PLAIN, room: 2, grille: unitStyle[k] < 0.6, lit, kind });
+          if (s < 0.1) {            // enclosed balcony: glazed box hung over the living window
+            F.box(B, M.metalDark, lu + lw / 2, v + 0.15, 0.4, lw + 0.3, 0.12, 0.8);
+            F.box(B, M.glassFrost, lu + lw / 2, v + 1.2, 0.8, lw + 0.25, 1.9, 0.02);
+            F.box(B, M.metalDark, lu + lw / 2, v + 2.2, 0.4, lw + 0.3, 0.08, 0.8);
+            wins.push({ u: lu, v: v + 0.55, w: lw, h: 1.75, style: WIN.SLIDER, lit: lit * 1.3, kind });
+          } else wins.push({ u: lu, v: v + 0.55, w: lw, h: 1.75, style: WIN.SLIDER, lit, kind });
+          if (s > 0.85) F.box(B, M.galv, ku + kw + 0.35, v + 2.3, 0.04, 0.18, 0.18, 0.08);
         } else if (program === 'paired') {
-          const ww = 0.85, gap = 0.16, cu = u0 + unitW / 2;
+          const ww = 0.85 + (unitStyle[k] > 0.75 ? 0.35 : 0), gap = 0.16, cu = u0 + unitW / 2;
           wins.push({ u: cu - gap / 2 - ww, v: v + 0.8, w: ww, h: 1.55, style: WIN.PLAIN, lit, kind });
-          wins.push({ u: cu + gap / 2, v: v + 0.8, w: ww, h: 1.55, style: WIN.PLAIN, lit, kind, seed: x0 + v * 3 + k });
+          wins.push({ u: cu + gap / 2, v: v + 0.8, w: ww, h: 1.55, style: unitStyle[k] > 0.4 ? WIN.PLAIN : WIN.SLIDER, lit, kind, seed: x0 + v * 3 + k });
         } else if (program === 'hotel') {
-          if (k % 3 === 2) { F.box(B, M.galv, u0 + unitW / 2, v + 0.9, 0.06, 0.9, 0.5, 0.14); continue; }
+          if (s < 0.12) { F.box(B, M.galv, u0 + unitW / 2, v + 1.6, 0.04, unitW - 1.6, 0.5, 0.08); continue; }   // louvred vent
           wins.push({ u: u0 + 0.6, v: v + 1.0, w: unitW - 1.2, h: 1.25, style: WIN.PLAIN, lit, kind });
         } else if (program === 'balcony') {
           wins.push({ u: u0 + 0.35, v: v + 0.2, w: unitW - 0.7, h: 2.15, style: WIN.SLIDER, lit, kind });
         }
       }
-      if (program === 'ribbon') wins.push({ u: 0.5, v: v + 1.0, w: len - 1.0, h: 1.4, style: WIN.RIBBON, lit, kind });
+      if (program === 'ribbon') wins.push({ u: 0.5, v: v + 1.0, w: uEnd - 1.0, h: 1.4, style: WIN.RIBBON, lit, kind });
       if (program === 'curtain') wins.push({ u: 0.15, v: v + 0.35, w: len - 0.3, h: floor - 0.55, style: WIN.RIBBON, lit, kind: 'office', inset: 0.08, glass: 3 });
+      if (stairHere) wins.push({ u: len - 2.3, v: v + 0.2, w: 0.85, h: 2.05, style: WIN.PLAIN, lit: 0.15, kind });   // stair door
     });
     wallWithWindows(B, mat, F, len, h - ground, 0.3, wins.map((w) => ({ ...w, v: w.v - ground })), world.windows, { v0: ground, sillMat: program === 'curtain' ? null : M.concreteDark, kind });
-    // ground floor: shop glass with a fascia, or a blank plinth with a steel door
-    const gs = r.next();
-    if (gs < 0.6) {
-      wallWithOpenings(B, M.tileDark, F, len, ground, 0.3, [{ u: 0.8, v: 0.2, w: len - 1.6, h: ground - 1.4 }], 0.5);
-      const c = F.p(len / 2, 0.2 + (ground - 1.4) / 2, -0.12);
-      world.windows.add(c.x, c.y, c.z, F.ry, len - 1.6, ground - 1.4, { style: WIN.SHOP, depth: 5, lit: 1, seed: c.x + c.z, kind: 'shop' });
-      F.box(B, M.metalDark, len / 2, ground - 0.55, 0.12, len - 1.0, 0.8, 0.22);
-    } else {
-      wallWithOpenings(B, M.concreteDark, F, len, ground, 0.3, [{ u: len * 0.3, v: 0.1, w: 1.0, h: 2.2 }], 0.5);
-      F.box(B, new THREE.MeshStandardMaterial({ color: 0x3b4044, roughness: 0.5, metalness: 0.6 }), len * 0.3 + 0.5, 1.2, -0.25, 0.95, 2.15, 0.05);
+    // curtain wall depth: mullion fins + transoms
+    if (program === 'curtain') {
+      for (let u = 0.15; u <= len - 0.1; u += 1.5) F.box(B, M.metalBlack, u, ground + (h - ground) / 2, 0.12, 0.07, h - ground, 0.24);
+      for (const y of floors) F.box(B, M.metalBlack, len / 2, y + 0.2, 0.08, len, 0.32, 0.16);
     }
-    // slab bands, parapet with coping, downpipes and life on the façade
+    // ground floor: a row of tenancies 4–7 m wide behind piers, each a lit shop, a shutter or a lobby door
+    {
+      const usable = len - 1.0, nb = Math.max(1, Math.round(usable / r.range(4.5, 6.5))), bwid = usable / nb;
+      const opens = [], tens = [];
+      for (let b = 0; b < nb; b++) {
+        const u0 = 0.5 + b * bwid + 0.25, w = bwid - 0.5, t = r.next();
+        const kindT = t < 0.45 ? 'shop' : t < 0.75 ? 'shutter' : 'lobby';
+        const oh = kindT === 'lobby' ? 2.4 : ground - 1.4;
+        const ow = kindT === 'lobby' ? Math.min(2.2, w) : w;
+        const ou = kindT === 'lobby' ? u0 + (w - ow) / 2 : u0;
+        opens.push({ u: ou, v: 0.2, w: ow, h: oh }); tens.push([kindT, ou, ow, oh]);
+      }
+      wallWithOpenings(B, r.chance(0.5) ? M.tileDark : M.concreteDark, F, len, ground, 0.3, opens, 0.5);
+      for (const [kindT, ou, ow, oh] of tens) {
+        const c = F.p(ou + ow / 2, 0.2 + oh / 2, -0.12);
+        if (kindT === 'shop') {
+          world.windows.add(c.x, c.y, c.z, F.ry, ow, oh, { style: WIN.SHOP, depth: 4, lit: 1, seed: c.x * 1.3 + c.z * 2.1, kind: 'shop' });
+          F.box(B, M.metalDark, ou + ow / 2, ground - 0.85, 0.1, ow + 0.3, 0.7, 0.2);                    // fascia
+        } else if (kindT === 'shutter') {
+          F.box(B, M.corrugated, ou + ow / 2, 0.2 + oh / 2, -0.05, ow, oh, 0.04, 0.5);
+          F.box(B, M.metalDark, ou + ow / 2, 0.2 + oh + 0.15, -0.02, ow + 0.1, 0.3, 0.22);
+        } else {
+          world.windows.add(c.x, c.y, c.z, F.ry, ow, oh, { style: WIN.PLAIN, depth: 5, lit: 0.9, seed: c.x * 2.7 + c.z, kind: 'stair' });
+          F.box(B, M.steel, ou + ow / 2, 0.2 + oh + 0.08, 0.35, ow + 0.6, 0.08, 0.8);                      // canopy
+          F.box(B, glow(0xfff1d8, 2.2), ou + ow / 2, 0.2 + oh + 0.03, 0.45, 0.5, 0.02, 0.12);
+        }
+      }
+    }
+    // slab bands, parapet with coping
     if (bands && program !== 'curtain') for (const y of floors) F.box(B, M.concreteDark, len / 2, y, 0.09, len, 0.2, 0.18);
     F.box(B, mat, len / 2, h + 0.5, -0.15, len, 1.0, 0.3, 0.25);
     F.box(B, M.galv, len / 2, h + 1.03, -0.15, len + 0.04, 0.06, 0.38);
-    for (const u of [0.25, len - 0.25]) F.cyl(B, M.plasticGrey, 0.05, h, u, h / 2, 0.08, 'v', 8);
+    // downpipes at unit boundaries, with offsets at each slab
+    const pipesU = [0.25, len - 0.25, pad + Math.floor(nU / 2) * unitW].filter((u, i) => i < 2 || r.chance(0.6));
+    for (const u of pipesU) {
+      if (stairHere && u > len - 3.0) continue;
+      F.cyl(B, M.plasticGrey, 0.055, h, u, h / 2, 0.09, 'v', 8);
+      for (const y of floors) F.box(B, M.plasticGrey, u, y + 0.05, 0.05, 0.14, 0.05, 0.1);
+    }
+    if (stairHere) fireStair(B, F, len - 2.75, [...floors, h - 0.6].filter((y, i, a) => i < a.length - 1 || false), floor, h);
     if (program === 'units' || program === 'balcony' || program === 'paired') {
-      floors.forEach((y) => { for (let k = 0; k < nU; k++) if (r.chance(0.3)) ac.place(B, F.m(pad + k * unitW + r.range(0.6, unitW - 0.8), y + 0.35, 0.38), { lod: true }); });
+      floors.forEach((y) => { for (let k = 0; k < nU; k++) if (r.chance(0.09)) ac.place(B, F.m(pad + k * unitW + r.range(0.6, unitW - 0.8), y + 0.35, 0.38), { lod: true }); });
     }
     if (program === 'balcony') {
       for (const y of floors) {
         F.box(B, M.concrete, len / 2, y + 0.1, 0.65, len, 0.18, 1.3, 0.25);
         F.box(B, M.galv, len / 2, y + 1.15, 1.27, len, 0.05, 0.06);
         for (let u = 0.1; u < len; u += 0.13) F.cyl(B, M.galv, 0.01, 0.95, u, y + 0.68, 1.27, 'v', 4);
+        for (let k = 0; k <= nU; k++) F.box(B, M.glassFrost, pad + k * unitW, y + 1.2, 0.65, 0.02, 2.0, 1.25);   // fire-break partitions
         for (let k = 0; k < nU; k++) {
-          if (r.chance(0.18)) futon(B, F.m(pad + k * unitW + r.range(0.6, unitW - 0.6), y + 1.2, 1.27), r, { width: 0.95 });
-          else if (r.chance(0.3)) laundryLine(B, F.p(pad + k * unitW + 0.3, y + 2.35, 0.9), F.p(pad + (k + 1) * unitW - 0.3, y + 2.35, 0.9), r, 0.6);
+          if (r.chance(0.12)) futon(B, F.m(pad + k * unitW + r.range(0.6, unitW - 0.6), y + 1.2, 1.27), r, { width: 0.95 });
+          else if (r.chance(0.22)) laundryLine(B, F.p(pad + k * unitW + 0.3, y + 2.35, 0.9), F.p(pad + (k + 1) * unitW - 0.3, y + 2.35, 0.9), r, 0.6);
+          else if (r.chance(0.25)) plant(B, F.m(pad + k * unitW + r.range(0.5, unitW - 0.5), y + 0.2, 1.05), r, { size: 0.9 });
         }
       }
     }
+    // projecting signs on the lower floors (only on street faces)
+    if (root && fi === 0 && program !== 'curtain') for (let i = 0; i < signs; i++) projectingSign(root, F, 0.9 + i * Math.max(3, uEnd / (signs + 0.5)), ground + 1.8 + r.range(0, 3), r);
+  });
+  // roof plant
+  if (h < 60 && program !== 'curtain') {
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, rx = (x1 - x0) / 2 - 2, rz = (z1 - z0) / 2 - 2;
+    const sx = cx + rx * r.range(-0.6, 0.6), sz = cz + rz * r.range(-0.6, 0.6);
+    B.add(boxGeo(3.0, 2.8, 3.4, 0.25), mat, T(sx, h + 1.4, sz));
+    B.add(boxGeo(3.3, 0.2, 3.7, 0.25), M.concreteDark, T(sx, h + 2.9, sz));
+    if (r.chance(0.8)) waterTank().place(B, T(cx - rx * 0.5 * Math.sign(sx - cx || 1), h, cz - rz * 0.4, 0, r.range(0, 6), 0, 0.85, 0.85, 0.85));
+    const ax = cx + rx * r.range(-0.8, 0.8), az = cz + rz * r.range(-0.8, 0.8);
+    B.rod(M.galv, 0.04, new THREE.Vector3(ax, h, az), new THREE.Vector3(ax, h + r.range(4, 7), az));
+    for (let i = 0; i < 3; i++) B.add(new THREE.BoxGeometry(1.2 - i * 0.25, 0.03, 0.03), M.galv, T(ax, h + 3.2 + i * 0.6, az, 0, r.range(0, 3), 0));
   }
   return frames;
 }
 
 function buildNorthBlocks(world, B, root, rng) {
   // ---- NE: HOTEL LUNA (love hotel with a fairy-tale crown) ----
-  const luna = tower(world, B, { x0: 7.5, x1: 20, z0: -60, z1: -44.2, h: 30, mat: M.tileCream, faces: ['-x', '+z'], program: 'hotel', kind: 'hotel', lit: 0.4, floor: 3.2 });
-  for (const [x, z] of [[8.5, -45.2], [19, -45.2], [8.5, -59]]) {
-    B.add(new THREE.CylinderGeometry(1.0, 1.0, 6, 16), M.tileCream, T(x, 33, z));
-    B.add(new THREE.ConeGeometry(1.3, 3.2, 16), new THREE.MeshStandardMaterial({ color: 0x5a1a6a, roughness: 0.4, metalness: 0.3 }), T(x, 37.6, z));
-    B.add(new THREE.SphereGeometry(0.12, 8, 6), glow(0xff7ae0, 8), T(x, 39.3, z));
-  }
+  const luna = tower(world, B, { x0: 7.5, x1: 20, z0: -60, z1: -44.2, h: 30, mat: M.tileCream, faces: ['-x', '+z'], program: 'hotel', kind: 'hotel', lit: 0.4, floor: 3.2, root, signs: 0, stair: false });
+  // the love hotel's discreet screened entrance + a mansard crown in dark slate
+  B.add(boxGeo(12.6, 2.4, 16.0, 0.25), new THREE.MeshStandardMaterial({ color: 0x2a2630, roughness: 0.55, metalness: 0.2 }), T(13.75, 31.4, -52.1));
+  for (let z = -59.5; z < -44.6; z += 1.2) B.add(new THREE.BoxGeometry(0.12, 2.0, 0.08), M.metalBlack, T(7.45, 1.2, z));
   const lunaSign = neonSign({ text: 'HOTEL LUNA', height: 1.0, color: 0xff5ad8, intensity: 6, materials: M, halo: 0.7, raceway: true, tube: 0.07 });
   lunaSign.group.applyMatrix4(luna['-x'].m(7.8, 20.5, 0.12)); root.add(lunaSign.group);
   const moon = neonSign({ text: 'C', height: 2.2, color: 0xffe9a0, intensity: 6, materials: M, halo: 0.6, raceway: false, tube: 0.07 });
@@ -274,7 +357,7 @@ function buildNorthBlocks(world, B, root, rng) {
   rest.rotation.y = Math.PI; rest.position.set(7.5, 7.0, -45.4); root.add(rest);
 
   // ---- E: glass office slab with vertical screen ----
-  tower(world, B, { x0: 7.5, x1: 26, z0: -82, z1: -61, h: 62, mat: M.metalDark, faces: ['-x', '+z'], program: 'curtain', kind: 'office', lit: 0.3, floor: 3.6, bands: false });
+  tower(world, B, { x0: 7.5, x1: 26, z0: -82, z1: -61, h: 62, mat: M.metalDark, faces: ['-x', '+z'], program: 'curtain', kind: 'office', lit: 0.3, floor: 3.6, bands: false, root });
   const vscreen = new THREE.Mesh(new THREE.PlaneGeometry(4, 30), new THREE.ShaderMaterial({
     uniforms: { uTime: U.time },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
@@ -288,7 +371,7 @@ function buildNorthBlocks(world, B, root, rng) {
   vscreen.position.set(7.4, 34, -64); vscreen.rotation.y = -Math.PI / 2; root.add(vscreen);
 
   // ---- E: PACHINKO 銀河 palace ----
-  tower(world, B, { x0: 7.5, x1: 22, z0: -104, z1: -83, h: 22, mat: M.paintRed, faces: ['-x'], program: 'paired', kind: 'office', lit: 0.2, ground: 9 });
+  tower(world, B, { x0: 7.5, x1: 22, z0: -104, z1: -83, h: 22, mat: M.paintRed, faces: ['-x'], program: 'paired', kind: 'office', lit: 0.2, ground: 9, root, signs: 0 });
   const pach = neonSign({ text: 'PACHINKO', height: 1.6, color: 0xffd400, intensity: 6.5, materials: M, halo: 0.7, raceway: true, tube: 0.07, flicker: 0.0 });
   pach.group.applyMatrix4(new Frame('-x', 7.5, 0, -104).m(10.5, 5.0, 0.2)); root.add(pach.group);
   const ginga = lightBox({ w: 1.6, h: 9, d: 0.4, px: 90, intensity: 1.6, painter: (x, w, h) => {
@@ -303,18 +386,18 @@ function buildNorthBlocks(world, B, root, rng) {
   world.lights.push({ pos: new THREE.Vector3(5, 6, -94), color: 0xffa000, intensity: 7, distance: 14 });
 
   // ---- NW: 夜行 RECORDS & BOOKS ----
-  const rec = tower(world, B, { x0: -22, x1: -7.5, z0: -62, z1: -44.2, h: 24, mat: M.brick, faces: ['+x', '+z'], program: 'paired', lit: 0.5, floor: 3.4 });
+  const rec = tower(world, B, { x0: -22, x1: -7.5, z0: -62, z1: -44.2, h: 24, mat: M.brick, faces: ['+x', '+z'], program: 'paired', lit: 0.5, floor: 3.4, root, signs: 2 });
   const vinylSign = neonSign({ text: 'RECORDS', height: 0.9, color: 0x3af2ff, intensity: 6, materials: M, halo: 0.6, raceway: true, tube: 0.07 });
   vinylSign.group.applyMatrix4(rec['+x'].m(9, 4.6, 0.15)); root.add(vinylSign.group);
   world.windows.add(-7.45, 2.2, -53, Math.PI / 2, 12, 3.4, { style: WIN.SHOP, depth: 6, lit: 1, seed: 77, tint: 2 });
 
   // ---- W: residential tower (balconies) ----
-  const res = tower(world, B, { x0: -26, x1: -7.5, z0: -86, z1: -64, h: 66, mat: M.concrete, faces: ['+x', '+z'], program: 'balcony', lit: 0.5, floor: 3.2 });
+  const res = tower(world, B, { x0: -26, x1: -7.5, z0: -86, z1: -64, h: 66, mat: M.concrete, faces: ['+x', '+z'], program: 'balcony', lit: 0.5, floor: 3.2, root, signs: 1 });
   for (let y = 4.5; y < 64; y += 3.2) B.add(new THREE.BoxGeometry(1.0, 0.12, 22), M.concreteDark, T(-7.1, y, -75));
   // ---- W: tiny Inari shrine between towers ----
   buildShrine(world, B, root);
-  tower(world, B, { x0: -24, x1: -7.5, z0: -126, z1: -98, h: 38, mat: M.tileMint, faces: ['+x', '+z'], program: 'units', lit: 0.45 });
-  tower(world, B, { x0: 7.5, x1: 24, z0: -128, z1: -106, h: 46, mat: M.concreteWarm, faces: ['-x', '+z'], program: 'ribbon', lit: 0.45 });
+  tower(world, B, { x0: -24, x1: -7.5, z0: -126, z1: -98, h: 38, mat: M.tileMint, faces: ['+x', '+z'], program: 'units', lit: 0.45, root, signs: 2 });
+  tower(world, B, { x0: 7.5, x1: 24, z0: -128, z1: -106, h: 46, mat: M.concreteWarm, faces: ['-x', '+z'], program: 'ribbon', lit: 0.45, root, signs: 1 });
 }
 
 function buildShrine(world, B, root) {
@@ -353,8 +436,8 @@ function buildCrossStreetWalls(world, B, root, rng) {
     [20.5, 44, -70, -44.2, 40], [44, 66, -64, -44.2, 24], [-48, -22.5, -66, -44.2, 36], [-74, -48.5, -70, -44.2, 52]];
   const mats = [M.concrete, M.tileCream, M.brick, M.tileMint, M.concreteWarm, M.paintBlue];
   spans.forEach(([x0, x1, z0, z1, h], i) => {
-    const faces = z1 > -40 ? ['-z'] : ['+z'];
-    tower(world, B, { x0, x1, z0, z1, h, mat: mats[i % mats.length], faces, program: ['units', 'paired', 'balcony', 'ribbon', 'hotel', 'units', 'paired', 'curtain', 'balcony'][i % 9], lit: 0.45, floor: 3.3, seed: i });
+    const faces = [z1 > -40 ? '-z' : '+z', x0 > 0 ? '-x' : '+x'];   // street face + the side seen from the block
+    tower(world, B, { x0, x1, z0, z1, h, mat: mats[i % mats.length], faces, program: ['units', 'paired', 'balcony', 'ribbon', 'hotel', 'units', 'paired', 'curtain', 'balcony'][i % 9], lit: 0.45, floor: [3.3, 3.1, 3.0, 3.6, 3.2][i % 5], ground: [4.5, 5.2, 4.2, 6.0][i % 4], seed: i, root, signs: 1 + (i % 3 === 0 ? 1 : 0) });
   });
   // a few signs down the cross street
   const s1 = neonSign({ text: 'BAR', height: 1.2, color: 0x2af3ff, intensity: 6, materials: M, halo: 0.6, raceway: true });
@@ -367,43 +450,142 @@ function buildCrossStreetWalls(world, B, root, rng) {
   s4.group.position.set(-60, 8, -31.9); s4.group.rotation.y = Math.PI; root.add(s4.group);
 }
 
+
+/* ------------------------------ South end ------------------------------ */
+// The street ends the way Tokyo streets do: under a riveted plate-girder rail
+// bridge (gādo), with a T-junction of buildings behind it.
+function buildSouthEnd(world, B, root, rng) {
+  const zc = 47, y0 = 7.6, X = 70;
+  const green = new THREE.MeshStandardMaterial({ color: 0x2c3a36, roughness: 0.55, metalness: 0.55 });
+  // deck + two plate girders with stiffeners and bottom flanges
+  B.add(boxGeo(X * 2, 0.6, 7.4, 0.25), M.concreteDark, T(0, y0 + 1.8, zc));
+  for (const dz of [-3.7, 3.7]) {
+    B.add(new THREE.BoxGeometry(X * 2, 2.2, 0.08), green, T(0, y0 + 1.1, zc + dz));
+    B.add(new THREE.BoxGeometry(X * 2, 0.06, 0.55), green, T(0, y0, zc + dz));
+    B.add(new THREE.BoxGeometry(X * 2, 0.06, 0.45), green, T(0, y0 + 2.2, zc + dz));
+    for (let x = -X + 0.8; x < X; x += 1.6) B.add(new THREE.BoxGeometry(0.06, 2.1, 0.22), green, T(x, y0 + 1.1, zc + dz + Math.sign(dz) * 0.13));
+  }
+  // piers on the far kerbs with cross-heads, and abutment walls
+  for (const px of [-9.6, 9.6]) {
+    B.add(boxGeo(1.2, y0, 7.0, 0.25), M.concrete, T(px, y0 / 2, zc));
+    B.add(boxGeo(1.8, 0.6, 8.0, 0.25), M.concrete, T(px, y0 - 0.3, zc));
+  }
+  // catenary masts, noise-barrier panels and a parapet on top
+  for (let x = -X + 4; x < X; x += 12) {
+    B.add(new THREE.BoxGeometry(0.25, 6.0, 0.25), green, T(x, y0 + 5.1, zc - 3.3));
+    B.add(new THREE.BoxGeometry(0.15, 0.15, 7.2), green, T(x, y0 + 7.8, zc));
+  }
+  B.add(new THREE.BoxGeometry(X * 2, 0.02, 0.02), M.metalBlack, T(0, y0 + 7.2, zc - 1.0));
+  B.add(new THREE.BoxGeometry(X * 2, 1.4, 0.1), M.galv, T(0, y0 + 2.8, zc - 3.6));
+  // under-bridge lighting: tube fittings along the girder soffit
+  for (let x = -7.5; x <= 7.5; x += 2.5) B.add(new THREE.BoxGeometry(1.2, 0.06, 0.12), glow(0xfff1d8, 4), T(x, y0 - 0.06, zc + rng.range(-2.5, 2.5)));
+  world.lights.push({ pos: new THREE.Vector3(0, y0 - 0.6, zc), color: 0xffe2b8, intensity: 6, distance: 16 });
+  // clearance sign + a lit ad panel on the girder face
+  const clr = lightBox({ w: 1.5, h: 0.6, d: 0.12, px: 120, intensity: 1.1, bracket: 0, painter: (x, w, h) => {
+    x.fillStyle = '#f4f1ea'; x.fillRect(0, 0, w, h); x.strokeStyle = '#c8141e'; x.lineWidth = 10; x.strokeRect(6, 6, w - 12, h - 12);
+    x.fillStyle = '#111'; x.font = `bold 34px ${JP}`; x.textAlign = 'center'; x.fillText('高さ制限', w / 2, 30); x.font = `900 46px ${LAT}`; x.fillText('3.8 m', w / 2, 66);
+  } });
+  clr.rotation.y = Math.PI; clr.position.set(0.75, y0 - 0.45, zc - 3.85); root.add(clr);
+  const ad = lightBox({ w: 6.0, h: 1.6, d: 0.15, px: 70, intensity: 1.3, bracket: 0, painter: (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#0b1a3a'); g.addColorStop(1, '#3a0b3a'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#ffffff'; x.font = `900 52px ${LAT}`; x.fillText('JR NEO-KABUKICHŌ', 22, 62);
+    x.fillStyle = '#ffd400'; x.font = `bold 34px ${JP}`; x.fillText('新歌舞伎町駅 ← 120 m', 24, 100);
+  } });
+  ad.rotation.y = Math.PI; ad.position.set(-4.0, y0 + 1.1, zc - 3.86); root.add(ad);
+  // three buildings across the end of the street, facing north
+  tower(world, B, { x0: -40, x1: -12.5, z0: 55, z1: 74, h: 27, mat: M.tileCream, faces: ['-z'], program: 'balcony', lit: 0.45, floor: 3.0, ground: 4.4, seed: 71, root, signs: 2, stair: false });
+  tower(world, B, { x0: -12.5, x1: 10.5, z0: 55, z1: 74, h: 41, mat: M.brick, faces: ['-z'], program: 'paired', lit: 0.5, floor: 3.4, ground: 5.0, seed: 72, root, signs: 2 });
+  tower(world, B, { x0: 10.5, x1: 40, z0: 55, z1: 74, h: 21, mat: M.concreteWarm, faces: ['-z'], program: 'units', lit: 0.45, floor: 3.1, ground: 4.6, seed: 73, root, signs: 2 });
+}
+
 /* -------------------------------- Skyline ------------------------------ */
+// Distant city. Each tower is real massing (podium, setback shaft, plant
+// room) and its façade is resolved per storey: office floors with mullioned
+// glass lit a tenancy at a time, residential bays with balcony slabs and
+// curtains, hotel windows; spandrels, shopfront glow at street level and
+// faint up-light from the streets. Windows smaller than a pixel resolve to
+// their average instead of shimmering.
 function skylineMaterial() {
   const m = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]),
     vertexShader: /* glsl */`
       #include <common>
       #include <fog_pars_vertex>
-      attribute vec4 aB; varying vec3 vW; varying vec3 vN; varying vec4 vB; varying vec3 vSize;
+      attribute vec4 aB; varying vec3 vW; varying vec3 vN; varying vec4 vB; varying vec3 vSize; varying vec3 vO;
       void main(){ vB = aB; vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = wp.xyz;
         vN = normalize(mat3(modelMatrix * instanceMatrix) * normal);
         vSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+        vO = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */`
       #include <common>
       #include <fog_pars_fragment>
-      uniform float uTime; varying vec3 vW; varying vec3 vN; varying vec4 vB; varying vec3 vSize;
+      uniform float uTime; varying vec3 vW; varying vec3 vN; varying vec4 vB; varying vec3 vSize; varying vec3 vO;
       ${GLSL_NOISE}
+      float box(vec2 f, vec2 lo, vec2 hi, vec2 fw){
+        vec2 a = smoothstep(lo - fw, lo + fw, f) * (1.0 - smoothstep(hi - fw, hi + fw, f));
+        return a.x * a.y;
+      }
       void main(){
-        vec3 base = vec3(0.012, 0.012, 0.022) * (0.6 + vB.y * 0.8);
-        vec3 c = base;
-        if (abs(vN.y) < 0.5) {
+        float bid = vB.x * 97.13;
+        float type = floor(vB.z * 3.0);                 // 0 office · 1 residential · 2 hotel/mixed
+        bool plain = vB.w > 1.5;
+        vec3 mat = type < 0.5 ? vec3(0.016, 0.019, 0.026) : mix(vec3(0.026, 0.024, 0.027), vec3(0.04, 0.034, 0.03), vB.y);
+        // street up-light and haze glow on the lower façade
+        vec3 c = mat * (0.6 + 0.6 * exp(-vW.y / 35.0)) + vec3(0.05, 0.024, 0.038) * exp(-vW.y / 22.0);
+        if (abs(vN.y) > 0.5) { c = mat * 0.6; }
+        else if (!plain) {
           vec2 p = abs(vN.x) > 0.5 ? vec2(vW.z, vW.y) : vec2(vW.x, vW.y);
-          vec2 cell = vec2(2.6 + vB.z * 1.2, 3.4);
-          vec2 id = floor(p / cell); vec2 f = fract(p / cell);
-          float win = step(0.18, f.x) * step(f.x, 0.84) * step(0.25, f.y) * step(f.y, 0.85);
-          float h = hash12(id + vB.x * 91.0);
-          float lit = step(1.0 - (0.22 + vB.y * 0.3), h);
-          vec3 lc = mix(vec3(1.0, 0.72, 0.42), vec3(0.6, 0.8, 1.0), step(0.6, hash12(id * 1.7 + 3.0)));
-          lc = mix(lc, vec3(1.0, 0.3, 0.8), step(0.95, hash12(id * 2.3)));
-          c += lc * win * lit * (0.6 + 0.6 * hash12(id + 7.0));
-          // vertical LED trims on some towers
-          float edge = step(0.5, vB.w) * smoothstep(0.08, 0.0, min(abs(fract(p.x / 24.0) - 0.0), abs(fract(p.x / 24.0) - 1.0)));
-          c += vec3(0.1, 0.8, 1.0) * edge * 0.7;
-          // top crown band
-          c += mix(vec3(1.0, 0.2, 0.5), vec3(0.2, 0.9, 1.0), vB.y) * step(vSize.y - 2.0, vW.y) * step(0.6, vB.w) * 2.5;
+          float fh = type < 0.5 ? 3.9 : type < 1.5 ? 3.0 : 3.3;
+          float cw = type < 0.5 ? 1.6 : type < 1.5 ? 3.6 : 2.5;
+          vec2 g = vec2(p.x / cw, (p.y - 0.3) / fh);
+          vec2 id = floor(g), f = fract(g);
+          vec2 fw = max(fwidth(g), vec2(1e-4)) * 0.75;
+          float tiny = clamp(max(fw.x, fw.y) * 2.2 - 0.25, 0.0, 1.0);
+          bool ground = vW.y < 5.2;
+          // window mask + lit state per type
+          float win, lit, area; vec3 lc;
+          float hf = hash12(vec2(id.y * 1.37, bid));
+          if (type < 0.5) {
+            win = box(f, vec2(0.05, 0.17), vec2(0.95, 0.93), fw); area = 0.68;
+            float seg = floor(p.x / (cw * (5.0 + floor(vB.y * 4.0))));
+            float on = step(0.6, hash12(vec2(id.y + seg * 7.1, bid + 3.0)));
+            lit = on * (0.55 + 0.35 * hash12(vec2(seg, id.y + bid)));
+            lc = mix(vec3(0.78, 0.86, 1.0), vec3(1.0, 0.93, 0.8), step(0.5, hash12(vec2(seg + 2.0, bid))));
+          } else if (type < 1.5) {
+            win = box(f, vec2(0.18, 0.3), vec2(0.82, 0.88), fw); area = 0.37;
+            float hw = hash12(id + bid);
+            lit = step(0.7, hw) * (0.25 + 0.75 * hash12(id * 1.7 + bid));
+            lc = mix(vec3(1.0, 0.66, 0.38), vec3(1.0, 0.82, 0.62), hash12(id + 5.0));
+            if (hw > 0.97) lc = vec3(0.45, 0.6, 1.0) * (0.7 + 0.3 * sin(uTime * 7.0 + hw * 50.0));
+            // balcony slab edge catches the up-light
+            c += vec3(0.03, 0.025, 0.028) * box(f, vec2(-0.1, 0.0), vec2(1.1, 0.07), fw) * (1.0 - tiny);
+          } else {
+            win = box(f, vec2(0.3, 0.34), vec2(0.7, 0.8), fw); area = 0.18;
+            lit = step(0.55, hash12(id + bid * 1.3)) * (0.4 + 0.6 * hash12(id + 9.0));
+            lc = vec3(1.0, 0.75, 0.5);
+          }
+          // interior falloff (brighter under the ceiling), frame shadow at the reveal
+          float wy = clamp((f.y - 0.3) / 0.6, 0.0, 1.0);
+          float reveal = smoothstep(0.0, 0.08, min(min(f.x - 0.05, 0.95 - f.x), min(f.y - 0.17, 0.93 - f.y)));
+          vec3 glass = type < 0.5 ? vec3(0.012, 0.016, 0.026) + vec3(0.01, 0.014, 0.024) * smoothstep(0.0, 200.0, vW.y) : vec3(0.008, 0.008, 0.011);
+          vec3 inside = lc * lit * mix(0.65, 1.05, wy) * mix(0.6, 1.0, reveal);
+          vec3 detailed = mix(c, glass + inside, win);
+          // floor slabs / spandrel line
+          detailed += vec3(0.012, 0.011, 0.012) * box(f, vec2(-0.1, 0.0), vec2(1.1, 0.05), fw);
+          // sub-pixel windows: average radiance of the façade instead
+          float litAvg = type < 0.5 ? 0.4 * 0.7 : type < 1.5 ? 0.3 * 0.6 : 0.45 * 0.7;
+          vec3 avgCol = type < 0.5 ? vec3(0.85, 0.88, 0.95) : vec3(1.0, 0.72, 0.45);
+          vec3 averaged = mix(c, glass, area) + avgCol * litAvg * area * (0.5 + hf);
+          c = mix(detailed, averaged, tiny);
+          if (ground) {             // shopfronts and their signs at street level
+            float shop = hash12(vec2(floor(p.x / 7.0), bid));
+            vec3 sc = shop > 0.8 ? vec3(1.0, 0.25, 0.5) : shop > 0.6 ? vec3(0.3, 0.8, 1.0) : vec3(1.0, 0.8, 0.55);
+            c = mix(c, sc * (0.35 + 0.4 * shop), smoothstep(0.4, 0.8, vW.y) * (1.0 - smoothstep(3.2, 3.6, vW.y)) * step(0.25, shop));
+            c += sc * 0.9 * smoothstep(3.6, 3.8, vW.y) * (1.0 - smoothstep(4.5, 4.7, vW.y)) * step(0.45, shop);
+          }
         }
         gl_FragColor = vec4(c, 1.0);
         #include <fog_fragment>
@@ -414,12 +596,44 @@ function skylineMaterial() {
   return m;
 }
 
+// tower → podium + setback shaft + plant room, sharing a façade programme (aB)
+function massing(items, rng, x, z, w, d, h, ab) {
+  const out = [];
+  if (h > 70 && rng.chance(0.75)) {
+    const ph = rng.range(12, 24);
+    out.push([x, z, w, d, ph, ab]);
+    const s1 = rng.range(0.62, 0.85);
+    const h1 = h * rng.range(0.55, 0.8);
+    out.push([x + rng.range(-1, 1) * w * 0.08, z + rng.range(-1, 1) * d * 0.08, w * s1, d * s1, h1, ab]);
+    if (rng.chance(0.7)) out.push([x, z, w * s1 * rng.range(0.6, 0.85), d * s1 * rng.range(0.6, 0.85), h, ab]);
+  } else out.push([x, z, w, d, h, ab]);
+  const top = out[out.length - 1];
+  out.push([top[0] + rng.range(-0.2, 0.2) * top[2], top[1] + rng.range(-0.2, 0.2) * top[3], top[2] * rng.range(0.25, 0.45), top[3] * rng.range(0.25, 0.45), top[4] + rng.range(3, 7), [ab[0], ab[1], ab[2], 2.0]]);
+  items.push(...out);
+}
+function instanceBoxes(root, items) {
+  const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(geo, skylineMaterial(), items.length);
+  const aB = new Float32Array(items.length * 4);
+  const m = new THREE.Matrix4();
+  items.forEach(([x, z, w, d, h, ab], i) => {
+    m.compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion(), new THREE.Vector3(w, h, d));
+    mesh.setMatrixAt(i, m);
+    aB.set(ab, i * 4);
+  });
+  geo.setAttribute('aB', new THREE.InstancedBufferAttribute(aB, 4));
+  mesh.computeBoundingSphere();
+  mesh.frustumCulled = false;
+  root.add(mesh);
+  return mesh;
+}
+
 function buildSkyline(world, root, rng) {
   const items = [];
   const tryAdd = (x, z, w, d, h) => {
-    if (Math.abs(x) < 16 && z < -128) return;            // keep the street vista to the spire
+    if (Math.abs(x) < 14 && z < -128 && z > -420 && h > 30) h = rng.range(14, 30);   // low blocks in the vista, the spire stays clear
     if (x > -95 && x < 95 && z > -132 && z < 70) return;  // the modelled district
-    items.push([x, z, w, d, h]);
+    massing(items, rng, x, z, w, d, h, [rng.next(), rng.next(), rng.next(), rng.next() * 0.9]);
   };
   for (let i = 0; i < 520; i++) {
     const a = rng.range(0, Math.PI * 2), r = rng.range(110, 620);
@@ -427,27 +641,28 @@ function buildSkyline(world, root, rng) {
     const tall = rng.chance(0.15);
     tryAdd(x, z, rng.range(14, 40), rng.range(14, 40), tall ? rng.range(140, 320) : rng.range(30, 120));
   }
-  // continue the main street as a canyon toward the spire
+  // the main street continues as a canyon toward the spire, closed by low blocks and overpasses
   for (let z = -140; z > -560; z -= rng.range(24, 40)) {
     for (const s of [-1, 1]) tryAdd(s * rng.range(22, 32), z, rng.range(16, 22), rng.range(18, 30), rng.range(40, 160));
   }
-  const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
-  const mesh = new THREE.InstancedMesh(geo, skylineMaterial(), items.length);
-  const aB = new Float32Array(items.length * 4);
-  const m = new THREE.Matrix4();
-  items.forEach(([x, z, w, d, h], i) => {
-    m.compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion(), new THREE.Vector3(w, h, d));
-    mesh.setMatrixAt(i, m);
-    aB.set([rng.next(), rng.next(), rng.next(), rng.next()], i * 4);
-  });
-  geo.setAttribute('aB', new THREE.InstancedBufferAttribute(aB, 4));
-  mesh.computeBoundingSphere();
-  mesh.frustumCulled = false;
-  root.add(mesh);
+  const ov = [];
+  for (const [z, y] of [[-232, 22], [-318, 31], [-405, 18]]) { ov.push([0, z, 70, 5, y, [0.3, 0.5, 0.9, 2.0]]); }
+  instanceBoxes(root, items);
+  // overpass decks across the canyon (deck only: thin boxes high up)
+  const deckGeo = new THREE.BoxGeometry(1, 1, 1);
+  const deck = new THREE.InstancedMesh(deckGeo, new THREE.MeshStandardMaterial({ color: 0x15141a, roughness: 0.9 }), ov.length);
+  const dm = new THREE.Matrix4();
+  ov.forEach(([x, z, w, d, y], i) => { dm.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(w, 2.2, d)); deck.setMatrixAt(i, dm); });
+  root.add(deck);
+  const dl = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), glow(0xffb070, 3), ov.length * 12);
+  let k = 0;
+  ov.forEach(([x, z, w, d, y]) => { for (let i = 0; i < 12; i++) { dm.compose(new THREE.Vector3(-w / 2 + (i + 0.5) * w / 12, y - 1.15, z + d / 2 + 0.05), new THREE.Quaternion(), new THREE.Vector3(0.9, 0.15, 0.1)); dl.setMatrixAt(k++, dm); } });
+  root.add(dl);
   // aviation lights on the tallest
   const tall = items.filter((it) => it[4] > 130);
   const lg = new THREE.SphereGeometry(0.9, 8, 6);
   const lm = new THREE.InstancedMesh(lg, glow(0xff2020, 10), tall.length);
+  const m = new THREE.Matrix4();
   tall.forEach(([x, z, , , h], i) => { m.makeTranslation(x, h + 2, z); lm.setMatrixAt(i, m); });
   lm.frustumCulled = false;
   root.add(lm);
@@ -571,6 +786,7 @@ function buildFiller(world, root, rng) {
     [7.5, 20, -60, -44.2], [7.5, 26, -82, -61], [7.5, 22, -104, -83], [-22, -7.5, -62, -44.2], [-26, -7.5, -86, -64], [-17, -7.5, -97, -87],
     [-24, -7.5, -126, -98], [7.5, 24, -128, -106], [22.5, 40, -32, -14], [40, 60, -32, -10], [60, 84, -32, -8], [-50, -30.5, -32, -6],
     [-75, -50.5, -32, -12], [20.5, 44, -70, -44.2], [44, 66, -64, -44.2], [-48, -22.5, -66, -44.2], [-74, -48.5, -70, -44.2],
+    [-40, 40, 43, 74],
   ];
   const blocked = (x0, x1, z0, z1) => {
     if (x1 > -8 && x0 < 8) return true;                       // main street
@@ -589,27 +805,11 @@ function buildFiller(world, root, rng) {
     }
   }
   // the main street continues south behind the camera
-  for (let z = 41; z < 120; z += rng.range(9, 14)) for (const s of [-1, 1]) {
+  for (let z = 41; z < 41; z += rng.range(9, 14)) for (const s of [-1, 1]) {
     const w = rng.range(10, 16), d = rng.range(7, 12);
     items.push([s * (7.5 + w / 2), z + d / 2, w, d, rng.range(10, 30)]);
   }
-  const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
-  const mesh = new THREE.InstancedMesh(geo, skylineMaterial(), items.length);
-  const aB = new Float32Array(items.length * 4);
-  const m = new THREE.Matrix4();
-  const clutter = [];
-  items.forEach(([x, z, w, d, h], i) => {
-    m.compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion(), new THREE.Vector3(w, h, d));
-    mesh.setMatrixAt(i, m);
-    aB.set([rng.next(), rng.next() * 0.7, rng.next(), rng.next() * 0.55], i * 4);
-    for (let k = 0; k < rng.int(2, 5); k++) clutter.push([x + rng.range(-w / 3, w / 3), h, z + rng.range(-d / 3, d / 3), rng.range(0.8, 3), rng.range(0.8, 2.6), rng.range(0.8, 3)]);
-  });
-  geo.setAttribute('aB', new THREE.InstancedBufferAttribute(aB, 4));
-  mesh.computeBoundingSphere();
-  root.add(mesh);
-  const cg = new THREE.BoxGeometry(1, 1, 1); cg.translate(0, 0.5, 0);
-  const cm = new THREE.InstancedMesh(cg, M.concreteDark, clutter.length);
-  clutter.forEach(([x, y, z, a, b, c], i) => { m.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(a, b, c)); cm.setMatrixAt(i, m); });
-  cm.computeBoundingSphere();
-  root.add(cm);
+  const boxes = [];
+  for (const [x, z, w, d, h] of items) massing(boxes, rng, x, z, w, d, h, [rng.next(), rng.next() * 0.7, 0.34 + rng.next() * 0.66, rng.next() * 0.5]);
+  instanceBoxes(root, boxes);
 }

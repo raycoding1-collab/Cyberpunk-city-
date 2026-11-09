@@ -375,25 +375,38 @@ const fabricMat = (i) => mat('fab' + i, () => {
 });
 const NFAB = FABRIC.length + 4;
 
-function shirtOnHanger(batch, m, rr) {
-  // wire hanger
-  batch.add(new THREE.TorusGeometry(0.03, 0.003, 4, 12, Math.PI * 1.4), M.galv, mul(m, T(0, 0.03, 0, 0, 0, -0.2)));
-  batch.add(tubeAlong([V(-0.21, -0.1, 0), V(0, -0.02, 0), V(0.21, -0.1, 0)], 0.003, 6, 4), M.galv, m);
-  batch.add(tubeAlong([V(-0.21, -0.1, 0), V(0.21, -0.1, 0)], 0.003, 2, 4), M.galv, m);
-  const fm = fabricMat(Math.floor(rr() * NFAB));
-  // body: curved panel with volume (front billows a little)
-  const L = 0.58 + rr() * 0.12;
-  const g = new THREE.PlaneGeometry(0.42, L, 6, 8);
+// hanging garment shell: elliptical tube closed at the shoulders by the hanger, open hem, drape folds
+function garmentShell(w, len, depth, rr, { flare = 0.06, slope = 0.07, folds = 5 } = {}) {
+  const g = new THREE.CylinderGeometry(1, 1, len, 18, 8, true);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); const t = 0.5 - y / L; p.setZ(i, 0.05 * Math.cos(x * 7.4) + 0.015 * Math.sin(t * 9 + x * 6) * t); p.setX(i, x * (1 + 0.04 * t)); }
-  g.computeVertexNormals();
-  batch.add(g, fm, mul(m, T(0, -0.08 - L / 2, 0.0)));
-  batch.add(g, fm, mul(m, T(0, -0.08 - L / 2, -0.01, 0, Math.PI, 0)));
-  // sleeves
-  for (const s of [-1, 1]) {
-    const sl = new THREE.PlaneGeometry(0.16, 0.24, 2, 3);
-    batch.add(sl, fm, mul(m, T(s * 0.24, -0.2, 0.01, 0, 0, s * 0.45)));
+  const ph = rr() * 6;
+  for (let i = 0; i < p.count; i++) {
+    const x0 = p.getX(i), z0 = p.getZ(i), y0 = p.getY(i);
+    const t = 0.5 - y0 / len;                         // 0 at the shoulders → 1 at the hem
+    const a = Math.atan2(z0, x0);
+    const hw = (w / 2) * (1 + flare * t);
+    const dep = depth * Math.min(1, 0.15 + t * 2.2);   // flattened by the hanger at the top
+    const fold = 1 + 0.06 * Math.sin(a * folds + ph + t * 2) * t;
+    const x = x0 * hw * fold, z = z0 * dep * fold + 0.01 * Math.sin(x0 * 6 + t * 7) * t;
+    const y = y0 - slope * Math.abs(x0) * (1 - t) - len / 2 - 0.02 * Math.cos(a * 2) * t;
+    p.setXYZ(i, x, y, z);
   }
+  g.computeVertexNormals();
+  return g;
+}
+function shirtOnHanger(batch, m, rr) {
+  batch.add(new THREE.TorusGeometry(0.03, 0.003, 4, 12, Math.PI * 1.4), M.galv, mul(m, T(0, 0.03, 0, 0, 0, -0.2)));
+  batch.add(tubeAlong([V(-0.2, -0.1, 0), V(0, -0.02, 0), V(0.2, -0.1, 0)], 0.003, 6, 4), M.galv, m);
+  const fm = fabricMat(Math.floor(rr() * NFAB));
+  const L = 0.56 + rr() * 0.14, W = 0.4 + rr() * 0.06;
+  batch.add(garmentShell(W, L, 0.045, rr), fm, mul(m, T(0, -0.04, 0)));
+  // sleeves: short open tubes hanging off the shoulder line
+  for (const s of [-1, 1]) {
+    const sl = new THREE.CylinderGeometry(0.055, 0.065, 0.22, 10, 1, true);
+    batch.add(sl, fm, mul(m, T(s * (W / 2 + 0.02), -0.2, 0, 0, 0, s * 0.42)));
+  }
+  // collar
+  batch.add(new THREE.TorusGeometry(0.06, 0.012, 5, 14, Math.PI), fm, mul(m, T(0, -0.06, 0.0, Math.PI / 2 - 0.25, 0, 0)));
 }
 function towel(batch, m, rr, len = 0.85) {
   const fm = fabricMat(Math.floor(rr() * NFAB));
@@ -425,23 +438,33 @@ function pinchHanger(batch, m, rr) {
     let x, z;
     if (d < rw) { x = -rw / 2 + d; z = -rd / 2; } else if (d < rw + rd) { x = rw / 2; z = -rd / 2 + d - rw; } else if (d < 2 * rw + rd) { x = rw / 2 - (d - rw - rd); z = rd / 2; } else { x = -rw / 2; z = rd / 2 - (d - 2 * rw - rd); }
     batch.add(new THREE.BoxGeometry(0.012, 0.04, 0.008), [M.plasticWhite, M.plasticYellow, M.plasticRed][i % 3], mul(m, T(x, -0.155, z)));
-    if (rr() < 0.75) {
-      const kind = rr();
-      const gm = new THREE.PlaneGeometry(kind < 0.5 ? 0.07 : 0.14, kind < 0.5 ? 0.2 : 0.16, 1, 3);
-      batch.add(gm, fabricMat(Math.floor(rr() * NFAB)), mul(m, T(x, -0.18 - (kind < 0.5 ? 0.1 : 0.08), z, 0, Math.atan2(x, z), 0)));
+    if (rr() < 0.6) {
+      const kind = rr(), fm2 = fabricMat(Math.floor(rr() * NFAB));
+      if (kind < 0.55) {      // sock: leg tube + foot tube
+        batch.add(new THREE.CapsuleGeometry(0.025, 0.14, 3, 8), fm2, mul(m, T(x, -0.26, z)));
+        batch.add(new THREE.CapsuleGeometry(0.024, 0.07, 3, 8), fm2, mul(m, T(x + 0.03, -0.35, z, 0, 0, Math.PI / 2 - 0.3)));
+      } else {                // small towel / underwear: thin rounded slab with a fold
+        batch.add(new THREE.CapsuleGeometry(0.06, 0.08, 3, 10), fm2, mul(m, T(x, -0.25, z, 0, Math.atan2(x, z), 0, 1, 1, 0.22)));
+      }
     }
   }
 }
 function trousers(batch, m, rr) {
   const fm = fabricMat(rr() < 0.5 ? FABRIC.length + 2 : Math.floor(rr() * FABRIC.length));
+  // folded over a hanger bar: two legs as tubes, the fold at the bar
+  batch.add(tubeAlong([V(-0.2, -0.06, 0), V(0.2, -0.06, 0)], 0.004, 2, 4), M.galv, m);
   for (const s of [-1, 1]) {
-    const g = new THREE.PlaneGeometry(0.17, 0.78, 2, 6);
+    const g = new THREE.CylinderGeometry(0.07, 0.062, 0.7, 12, 6, true);
     const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) p.setZ(i, 0.025 * Math.cos(p.getX(i) * 18));
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i), t = 0.5 - y / 0.7;
+      p.setZ(i, p.getZ(i) * 0.55 + 0.012 * Math.sin(t * 9 + s));
+      p.setX(i, p.getX(i) * (1 + 0.05 * Math.sin(t * 7 + s * 2)));
+    }
     g.computeVertexNormals();
-    batch.add(g, fm, mul(m, T(s * 0.1, -0.06 - 0.39, 0, 0, 0, s * 0.04)));
+    batch.add(g, fm, mul(m, T(s * 0.08, -0.06 - 0.35, s * 0.012, 0, 0, s * 0.03)));
   }
-  for (const s of [-1, 1]) batch.add(new THREE.BoxGeometry(0.015, 0.05, 0.012), M.plasticWhite, mul(m, T(s * 0.15, -0.02, 0.008)));
+  batch.add(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 16, 1, true), fm, mul(m, T(0, -0.07, 0, 0, 0, 0, 1, 1, 0.35)));
 }
 
 /** Rod between a and b, hung with a believable mix of garments. */

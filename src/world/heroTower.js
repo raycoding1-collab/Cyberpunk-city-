@@ -414,7 +414,7 @@ function module(world, B, root, F, s, rng) {
     for (let i = 0; i < n; i++) plant(B, F.m(cu0 + 0.25 + i * ((cu1 - cu0 - 0.5) / Math.max(1, n - 1 || 1)), cv0 + 0.015, proj + 0.24), rng, { size: rng.range(0.7, 1.05), pot: rng.pick(['terracotta', 'white', 'black']) });
     if (rng.chance(0.65)) laundryLine(B, F.p(cu0 + 0.05, cv1 - 0.08, proj + 0.3), F.p(cu1 - 0.05, cv1 - 0.08, proj + 0.3), rng, rng.range(0.35, 0.6));
     // condenser below the cage
-    ac.place(B, F.m(u0 + 0.12 + wu + ww * 0.5 + rng.range(-0.3, 0.3), v0 + 0.25, proj + 0.4));
+    if (rng.chance(0.45)) ac.place(B, F.m(u0 + 0.12 + wu + ww * 0.5 + rng.range(-0.3, 0.3), v0 + 0.25, proj + 0.4));
   } else if (type === 'balcony') {
     const rec = Math.min(1.1, proj - 0.3);
     wallWithWindows(B, mat, front(proj - rec), fw, fh, 0.14, [{ u: 0.3, v: 0.12, w: fw - 0.6, h: 2.25, style: WIN.SLIDER, depth: proj + 3, lit: 0.62, seed: seedBase }], world.windows, { sillMat: M.concreteDark });
@@ -425,7 +425,7 @@ function module(world, B, root, F, s, rng) {
     if (rng.chance(0.5)) F.box(B, M.glassFrost, uc, v0 + 0.16 + railH * 0.5, proj - 0.06, w - 0.3, railH * 0.85, 0.012);
     else for (let uu = u0 + 0.2; uu < u0 + w - 0.15; uu += 0.11) F.cyl(B, M.steel, 0.008, railH - 0.05, uu, v0 + 0.16 + railH / 2, proj - 0.05, 'v', 4);
     // stuff on the balcony
-    ac.place(B, F.m(u0 + 0.7, v0 + 0.16, proj - rec + 0.45), { floor: true });
+    if (rng.chance(0.5)) ac.place(B, F.m(u0 + 0.7, v0 + 0.16, proj - rec + 0.45), { floor: true });
     for (let i = 0; i < rng.int(1, 4); i++) plant(B, F.m(u0 + 1.6 + i * 0.45, v0 + 0.16, proj - 0.3), rng, { size: rng.range(0.8, 1.3) });
     laundryLine(B, F.p(u0 + 0.15, v0 + 2.35, proj - 0.55), F.p(u0 + w - 0.15, v0 + 2.35, proj - 0.55), rng, rng.range(0.5, 0.8));
     if (rng.chance(0.4)) futon(B, F.m(u0 + w * (0.3 + rng.range(0, 0.35)), v0 + 0.16 + railH + 0.03, proj - 0.05), rng, { width: Math.min(1.0, w * 0.35) });
@@ -466,7 +466,7 @@ function module(world, B, root, F, s, rng) {
   } else if (type === 'ac') {
     const ww = fw - 0.4;
     wallWithWindows(B, mat, front(proj), fw, fh, 0.14, [{ u: 0.2, v: 1.85, w: ww, h: 0.55, style: WIN.RIBBON, depth: proj + 2, lit: 0.5, seed: seedBase }], world.windows, { sillMat: M.concreteDark });
-    const n = Math.max(1, Math.min(3, Math.floor(fw / 1.0)));
+    const n = Math.max(1, Math.min(2, Math.floor(fw / 1.4)));
     for (let i = 0; i < n; i++) ac.place(B, F.m(u0 + 0.6 + i * ((fw - 0.6) / n) + 0.2, v0 + 0.35 + (i % 2) * 0.72, proj + 0.38));
     // vent hood and a fat duct
     F.box(B, M.galv, u0 + w - 0.45, v0 + 2.55, proj + 0.15, 0.4, 0.3, 0.3);
@@ -702,6 +702,14 @@ function buildRoof(world, B, root, rng) {
   for (let i = 0; i < 8; i++) B.add(new THREE.BoxGeometry(0.02, 0.06, 1.4), M.galv, T(17.78, y + 1.7 + i * 0.1, -4.2, 0, 0, 0.6));
   B.add(new THREE.BoxGeometry(0.9, 2.0, 0.05), new THREE.MeshStandardMaterial({ color: 0x324048, metalness: 0.6, roughness: 0.45 }), T(19.4, y + 1.0, -2.58));
   B.add(new THREE.BoxGeometry(0.2, 0.1, 0.06), glow(0xff3020, 3), T(19.4, y + 2.25, -2.56));
+  // machine-room life: caged ladder to its roof, exhaust fan, conduits, a stencilled plate
+  for (let k = 0; k < 10; k++) B.add(new THREE.CylinderGeometry(0.014, 0.014, 0.42, 5), M.galv, T(17.74, y + 0.3 + k * 0.29, -5.2, Math.PI / 2, 0, 0));
+  for (const dz of [-0.21, 0.21]) B.add(new THREE.BoxGeometry(0.04, 3.2, 0.04), M.galv, T(17.74, y + 1.6, -5.2 + dz));
+  B.add(new THREE.BoxGeometry(1.1, 0.7, 1.1), M.galv, T(20.0, y + 3.5, -4.9));
+  B.add(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20), M.metalBlack, T(20.0, y + 3.87, -4.9));
+  B.add(new THREE.BoxGeometry(0.8, 0.02, 0.06), M.galv, T(20.0, y + 3.9, -4.9, 0, 0.7, 0));
+  for (const dy of [0.6, 0.75, 0.9]) B.add(new THREE.CylinderGeometry(0.025, 0.025, 3.2, 6), M.plasticGrey, T(21.03, y + dy, -4.2, Math.PI / 2, 0, 0));
+  B.add(new THREE.BoxGeometry(0.42, 0.2, 0.02), new THREE.MeshStandardMaterial({ color: 0xf2e6c8, roughness: 0.6 }), T(19.4, y + 2.5, -2.58));
   // stair penthouse on the corner riser top is the riser itself; add a door light
   B.add(new THREE.BoxGeometry(0.2, 0.12, 0.05), glow(0xfff1c0, 3), T(8.25, ROOF + 2.6, 4.23));
 

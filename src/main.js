@@ -50,7 +50,7 @@ async function boot() {
   RectAreaLightUniformsLib.init();
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x0e0a1e, 0.0088);
+  scene.fog = new THREE.FogExp2(0x1b1222, 0.0086);
   const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.08, 1500);
   camera.position.set(-1.4, 1.65, 19);
   camera.lookAt(3.2, 7, -12);

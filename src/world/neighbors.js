@@ -444,10 +444,10 @@ function buildRobata(world, B, root, rng) {
     for (let k = 1; k < 5; k++) F.box(B, M.glassFrost, k * 4.5 + 0.1, y + 1.5, 0.65, 0.04, 2.6, 1.25); // fire partitions
     for (let k = 0; k < 5; k++) {
       const r = rng.next();
-      if (r < 0.6) ac.place(B, F.m(0.9 + k * 4.5 + rng.range(0, 2.4), y + 0.16, 0.8), { floor: true });
-      if (rng.chance(0.55)) laundryLine(B, F.p(0.3 + k * 4.5, y + 2.4, 0.9), F.p(4.2 + k * 4.5, y + 2.4, 0.9), rng, rng.range(0.5, 0.8));
+      if (r < 0.3) ac.place(B, F.m(0.9 + k * 4.5 + rng.range(0, 2.4), y + 0.16, 0.8), { floor: true });
+      if (rng.chance(0.28)) laundryLine(B, F.p(0.3 + k * 4.5, y + 2.4, 0.9), F.p(4.2 + k * 4.5, y + 2.4, 0.9), rng, rng.range(0.5, 0.8));
       if (rng.chance(0.5)) plant(B, F.m(3.8 + k * 4.5, y + 1.2, 1.27), rng, { size: 0.7 });
-      if (rng.chance(0.25)) futon(B, F.m(1.6 + k * 4.5, y + 1.25, 1.27), rng, { width: 1.0 });
+      if (rng.chance(0.12)) futon(B, F.m(1.6 + k * 4.5, y + 1.25, 1.27), rng, { width: 1.0 });
     }
   }
   // mansion name plate + rooftop billboard frame (empty, rusted: "広告募集")
@@ -483,21 +483,83 @@ function buildArcade(world, B, root, rng) {
   // crane-game cabinets (UFO catchers): coloured base, glass box of plushies, lit marquee
   const plushCols = [0xffa0c8, 0xfff0a0, 0xa0e8ff, 0xc8a0ff, 0xffffff, 0xff8a6a, 0x9affb4];
   const marquee = (txt, c1, c2) => drawCanvas(256, 96, (x) => { const g = x.createLinearGradient(0, 0, 256, 0); g.addColorStop(0, c1); g.addColorStop(1, c2); x.fillStyle = g; x.fillRect(0, 0, 256, 96); x.fillStyle = '#fff'; x.font = `900 40px ${LAT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(txt, 128, 52); });
-  const mqs = [marquee('UFO★CATCH', '#ff2a8a', '#ffb000'), marquee('NEKO-PON', '#2a8aff', '#2af3ff'), marquee('KOI GRAB', '#ff3b2a', '#ffd400'), marquee('MEGA ∞', '#8a2aff', '#ff2ad4')];
-  let k = 0;
-  for (const row of [8.6, 10.6]) for (let u = 1.9; u < 20.5; u += 1.55) {
+  const mqTexts = [['UFO★CATCH', '#ff2a8a', '#ffb000'], ['NEKO-PON', '#2a8aff', '#2af3ff'], ['KOI GRAB', '#ff3b2a', '#ffd400'], ['MEGA ∞', '#8a2aff', '#ff2ad4'],
+    ['ぬいぐるみ', '#ff7ab0', '#ffd0e0'], ['フィギュア', '#1a1a2a', '#4a7aff'], ['お菓子', '#ffb000', '#ff5a2a']];
+  const mqMats = mqTexts.map(([t, a1, a2]) => faceMaterial(marquee(t, a1, a2), 1.8));
+  const cabCols = [0xff2a8a, 0x2a8aff, 0xffd400, 0x8a2aff, 0xf2f2f2, 0x1a1a1e, 0xff6a2a, 0x2ad48a];
+  const plushM = plushCols.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 }));
+  const boxM = [0x1a3a8a, 0xd81a3a, 0xf2f2f2, 0x111111].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 }));
+  const prize = (x, y, z) => {
+    const t = rng.next(), pm = rng.pick(plushM);
+    if (t < 0.5) {               // little bear: body + head + ears
+      const sc = rng.range(0.8, 1.25);
+      B.add(new THREE.SphereGeometry(0.1 * sc, 10, 8), pm, T(x, y + 0.09 * sc, z, 0, 0, 0, 1, 1.1, 0.9));
+      B.add(new THREE.SphereGeometry(0.075 * sc, 10, 8), pm, T(x, y + 0.24 * sc, z));
+      for (const s2 of [-1, 1]) B.add(new THREE.SphereGeometry(0.028 * sc, 6, 5), pm, T(x + s2 * 0.055 * sc, y + 0.3 * sc, z));
+    } else if (t < 0.8) {        // boxed figure / snack box
+      B.add(new THREE.BoxGeometry(rng.range(0.14, 0.24), rng.range(0.16, 0.3), rng.range(0.1, 0.16)), rng.pick(boxM), T(x, y + 0.1, z, 0, rng.range(0, 3), rng.range(-0.3, 0.3)));
+    } else {                     // capsule
+      B.add(new THREE.CapsuleGeometry(0.05, 0.05, 4, 8), pm, T(x, y + 0.06, z, rng.range(0, 3), 0, Math.PI / 2));
+    }
+  };
+  const cabinet = (u, row, type) => {
     const base = F.p(u, 0, -(row - 7.5));
-    const col = new THREE.MeshStandardMaterial({ color: [0xff2a8a, 0x2a8aff, 0xffd400, 0x8a2aff][k % 4], roughness: 0.25, metalness: 0.3 });
-    B.add(new RoundedBoxGeometry(1.2, 0.95, 1.1, 2, 0.06), col, T(base.x, 0.2 + 0.475, base.z));
-    B.add(new THREE.BoxGeometry(1.15, 1.05, 1.05), M.glassClear, T(base.x, 0.2 + 0.95 + 0.52, base.z));
-    for (const [a, b] of [[-0.57, -0.52], [-0.57, 0.52], [0.57, -0.52], [0.57, 0.52]]) B.add(new THREE.BoxGeometry(0.05, 1.05, 0.05), M.chrome, T(base.x + a, 1.67, base.z + b));
-    for (let p = 0; p < 9; p++) B.add(new THREE.SphereGeometry(rng.range(0.1, 0.16), 10, 8), new THREE.MeshStandardMaterial({ color: rng.pick(plushCols), roughness: 0.9 }), T(base.x + rng.range(-0.4, 0.4), 1.25 + rng.range(0, 0.15), base.z + rng.range(-0.38, 0.38)));
-    B.add(new THREE.CylinderGeometry(0.015, 0.015, 0.4, 6), M.chrome, T(base.x + rng.range(-0.2, 0.2), 1.95, base.z));
-    B.add(new THREE.BoxGeometry(1.15, 0.03, 1.05), glow(0xffffff, 3), T(base.x, 2.2, base.z));
-    const mq = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.42), faceMaterial(mqs[k % 4], 1.8));
-    mq.position.set(base.x - 0.53, 2.45, base.z); mq.rotation.y = -Math.PI / 2; root.add(mq);
-    B.add(new THREE.BoxGeometry(1.0, 0.45, 1.15), M.plasticBlack, T(base.x + 0.05, 2.45, base.z));
-    k++;
+    const col = new THREE.MeshStandardMaterial({ color: rng.pick(cabCols), roughness: 0.25, metalness: 0.3 });
+    if (type === 'gacha') {      // bank of capsule-toy machines, two tiers on a stand
+      B.add(new THREE.BoxGeometry(0.5, 0.55, 1.4), M.metalDark, T(base.x, 0.2 + 0.275, base.z));
+      for (let tier = 0; tier < 2; tier++) for (let i = 0; i < 3; i++) {
+        const y = 0.75 + tier * 0.62, z = base.z - 0.46 + i * 0.46;
+        B.add(new RoundedBoxGeometry(0.44, 0.58, 0.42, 2, 0.04), new THREE.MeshStandardMaterial({ color: rng.pick(cabCols), roughness: 0.3 }), T(base.x, y + 0.29, z));
+        B.add(new THREE.SphereGeometry(0.15, 14, 10, 0, Math.PI), M.glassClear, T(base.x - 0.2, y + 0.38, z, 0, -Math.PI / 2, 0));
+        for (let c = 0; c < 4; c++) B.add(new THREE.SphereGeometry(0.035, 8, 6), rng.pick(plushM), T(base.x - 0.16, y + 0.3 + rng.range(0, 0.12), z + rng.range(-0.08, 0.08)));
+        B.add(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 12), M.chrome, T(base.x - 0.225, y + 0.12, z, 0, 0, Math.PI / 2));
+      }
+      return 0.0;
+    }
+    if (type === 'booth') {      // photo booth with a printed curtain
+      B.add(new RoundedBoxGeometry(1.4, 2.3, 1.8, 2, 0.08), col, T(base.x + 0.1, 0.2 + 1.15, base.z));
+      const cur = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.6, 10, 1), faceMaterial(drawCanvas(256, 340, (x) => {
+        const g = x.createLinearGradient(0, 0, 0, 340); g.addColorStop(0, '#ff7ab0'); g.addColorStop(1, '#7ab0ff'); x.fillStyle = g; x.fillRect(0, 0, 256, 340);
+        x.fillStyle = '#fff'; x.beginPath(); x.ellipse(128, 130, 70, 86, 0, 0, 7); x.fill(); x.fillStyle = '#3a2a2a'; x.beginPath(); x.ellipse(128, 92, 80, 60, 0, Math.PI, 0); x.fill();
+        x.font = `900 44px ${LAT}`; x.textAlign = 'center'; x.fillStyle = '#fff'; x.fillText('PURI★', 128, 300);
+      }), 1.1));
+      const cp = cur.geometry.attributes.position; for (let i = 0; i < cp.count; i++) cp.setZ(i, 0.03 * Math.sin(cp.getX(i) * 18)); cur.geometry.computeVertexNormals();
+      cur.position.set(base.x - 0.62, 1.15, base.z); cur.rotation.y = -Math.PI / 2; root.add(cur);
+      return 0.25;
+    }
+    if (type === 'rhythm') {     // drum cabinet with a lit screen
+      B.add(new RoundedBoxGeometry(0.9, 1.9, 1.2, 2, 0.06), col, T(base.x + 0.15, 0.2 + 0.95, base.z));
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.55), glow(rng.pick([0x40c0ff, 0xff60c0, 0xffd040]), 1.6)); scr.position.set(base.x - 0.31, 1.55, base.z); scr.rotation.y = -Math.PI / 2; root.add(scr);
+      for (const dz of [-0.28, 0.28]) B.add(new THREE.CylinderGeometry(0.22, 0.2, 0.32, 18), M.woodLight, T(base.x - 0.45, 0.2 + 0.85, base.z + dz, 0, 0, Math.PI / 2 - 0.3));
+      return 0.0;
+    }
+    const twin = type === 'twin';
+    const w = twin ? 2.1 : rng.range(1.0, 1.4), bh = rng.range(0.85, 1.05), gh = rng.range(0.95, 1.2), dz = twin ? w : 1.1, dx = rng.range(1.0, 1.2);
+    B.add(new RoundedBoxGeometry(dx, bh, dz, 2, 0.06), col, T(base.x, 0.2 + bh / 2, base.z));
+    B.add(new THREE.BoxGeometry(dx - 0.05, gh, dz - 0.05), M.glassClear, T(base.x, 0.2 + bh + gh / 2, base.z));
+    for (const [a1, b1] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) B.add(new THREE.BoxGeometry(0.05, gh, 0.05), M.chrome, T(base.x + a1 * (dx / 2 - 0.03), 0.2 + bh + gh / 2, base.z + b1 * (dz / 2 - 0.03)));
+    if (twin) B.add(new THREE.BoxGeometry(dx - 0.06, gh, 0.03), M.glassClear, T(base.x, 0.2 + bh + gh / 2, base.z));
+    const n = Math.round((twin ? 14 : 8) * rng.range(0.7, 1.2));
+    for (let i = 0; i < n; i++) prize(base.x + rng.range(-dx / 2 + 0.15, dx / 2 - 0.15), 0.2 + bh, base.z + rng.range(-dz / 2 + 0.15, dz / 2 - 0.15));
+    B.add(new THREE.CylinderGeometry(0.015, 0.015, gh * 0.4, 6), M.chrome, T(base.x + rng.range(-0.2, 0.2), 0.2 + bh + gh * 0.8, base.z));
+    B.add(new THREE.ConeGeometry(0.06, 0.1, 3, 1, true), M.chrome, T(base.x, 0.2 + bh + gh * 0.58, base.z, Math.PI, 0, 0));
+    B.add(new THREE.BoxGeometry(dx - 0.05, 0.03, dz - 0.05), glow(0xffffff, 3), T(base.x, 0.2 + bh + gh + 0.02, base.z));
+    B.add(new THREE.BoxGeometry(dx - 0.1, 0.42, dz), M.plasticBlack, T(base.x + 0.05, 0.2 + bh + gh + 0.25, base.z));
+    const mq = new THREE.Mesh(new THREE.PlaneGeometry(dz - 0.05, 0.4), rng.pick(mqMats));
+    mq.position.set(base.x - dx / 2 + 0.03, 0.2 + bh + gh + 0.25, base.z); mq.rotation.y = -Math.PI / 2; root.add(mq);
+    return 0.0;
+  };
+  for (const row of [8.7, 11.2]) {
+    let u = row > 9 ? 2.6 : 1.7, last = '', run = 0;
+    while (u < 20.2) {
+      let type = rng.pick(['ufo', 'ufo', 'ufo', 'twin', 'gacha', 'ufo', 'rhythm', 'booth']);
+      if (type === last && ++run > 1) type = 'ufo' === last ? 'gacha' : 'ufo'; else if (type !== last) run = 0;
+      const w = type === 'twin' ? 2.1 : type === 'gacha' ? 1.4 : type === 'booth' ? 1.8 : type === 'rhythm' ? 1.2 : 1.25;
+      if (u + w > 20.6) break;
+      cabinet(u + w / 2, row, type);
+      u += w + rng.range(0.25, 0.6) + (rng.chance(0.15) ? 0.9 : 0);
+      last = type;
+    }
   }
   const pink = new THREE.RectAreaLight(0xff4ab8, 4.5, 20, 4);
   pink.position.set(7.4, 2.2, 20); pink.lookAt(0, 1.5, 20); root.add(pink);
@@ -581,8 +643,13 @@ function roofKit(world, B, root, rng, x0, x1, z0, z1, H, { skylights = false } =
     } else if (k < 0.8 && skylights) {
       B.add(new THREE.BoxGeometry(3.2, 0.25, 1.4), M.metalDark, T(x, H + 0.12, z));
       B.add(new THREE.BoxGeometry(3.0, 0.02, 1.2), glow(rng.pick([0xff2a8a, 0x2af3ff, 0xffd400]), 2.2), T(x, H + 0.26, z));
-    } else {
-      B.add(new THREE.BoxGeometry(rng.range(1, 2.5), rng.range(0.6, 1.4), rng.range(1, 2.5)), M.concreteWarm, T(x, H + 0.5, z));
+    } else if (k < 0.9) {        // roof hatch with a lid and grab rails
+      B.add(boxGeo(1.0, 0.6, 1.0, 0.5), M.concreteWarm, T(x, H + 0.3, z));
+      B.add(new THREE.BoxGeometry(1.1, 0.06, 1.1), M.metalDark, T(x, H + 0.63, z));
+      for (const dx of [-0.35, 0.35]) B.add(new THREE.TorusGeometry(0.18, 0.015, 4, 10, Math.PI), M.galv, T(x + dx, H + 0.66, z - 0.55, 0, 0, 0));
+    } else {                      // small solar rack on a steel frame
+      B.add(new THREE.BoxGeometry(2.0, 0.04, 1.1), new THREE.MeshPhysicalMaterial({ color: 0x0a1426, roughness: 0.15, metalness: 0.4, clearcoat: 1 }), T(x, H + 0.8, z, -0.45, 0, 0));
+      for (const dx of [-0.9, 0.9]) for (const dz of [-0.4, 0.4]) B.add(new THREE.BoxGeometry(0.04, 0.6 + dz * 0.8, 0.04), M.galv, T(x + dx, H + 0.3 + dz * 0.4, z + dz));
     }
   }
   // duct runs

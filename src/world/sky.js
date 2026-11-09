@@ -18,13 +18,13 @@ export function buildSky(scene) {
         vec3 d = normalize(vDir);
         float h = clamp(d.y, -0.2, 1.0);
         vec3 zenith = vec3(0.004, 0.005, 0.016);
-        vec3 mid = vec3(0.03, 0.018, 0.06);
-        vec3 horizon = vec3(0.22, 0.07, 0.17);
+        vec3 mid = vec3(0.026, 0.017, 0.045);
+        vec3 horizon = vec3(0.105, 0.052, 0.085);
         vec3 col = mix(horizon, mid, smoothstep(0.0, 0.18, h));
         col = mix(col, zenith, smoothstep(0.15, 0.7, h));
         // warmer glow toward the dense downtown (north, -z)
         float north = pow(max(0.0, -d.z), 3.0);
-        col += vec3(0.25, 0.08, 0.05) * north * (1.0 - smoothstep(0.0, 0.25, h)) * 0.6;
+        col += vec3(0.16, 0.07, 0.045) * north * (1.0 - smoothstep(0.0, 0.25, h)) * 0.6;
         // low cloud deck, lit from below by the city
         vec2 cp = d.xz / max(0.08, d.y + 0.12) * 1.4;
         cp += vec2(uTime * 0.012, uTime * 0.004);

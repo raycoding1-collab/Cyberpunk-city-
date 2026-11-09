@@ -23,9 +23,9 @@ export const FILM = [
   // 3 · tower: crane down the stacked façade through the cable web
   { name: 'tower', dur: 5, wt: 20, fov: [48, 48],
     p: [[-1.5, 31, 0.5], [-1.2, 20, 3.8], [-0.8, 10, 7.2]], t: [[9.2, 29, -8.5], [9.2, 18, -8], [8.4, 7.8, -6]] },
-  // 4 · street: 45 cm over the puddles toward the corner; the train crosses far ahead
-  { name: 'street', dur: 5, wt: 3.8, fov: [44, 44],
-    p: [[-1.7, 0.45, 24], [-0.9, 0.6, 18.5], [0.1, 0.85, 13]], t: [[2.4, 4.2, -20], [2.6, 4.6, -20], [2.8, 5.0, -18]] },
+  // 4 · street: low tracking shot beside a woman crossing under a clear umbrella, the neon street behind her
+  { name: 'street', dur: 5, wt: 16.56, fov: [40, 38],
+    p: [[-4.6, 0.62, 13.4], [-2.0, 0.68, 13.1], [0.6, 0.78, 12.8]], t: [[-2.4, 1.25, 8.6], [-0.3, 1.3, 8.6], [1.9, 1.35, 8.6]] },
   // 5 · ramen: push-in past the lanterns toward the counter
   { name: 'ramen', dur: 4, wt: 30, fov: [46, 42],
     p: [[3.8, 1.5, 7.0], [4.7, 1.52, 5.0], [5.5, 1.55, 3.2]], t: [[10.4, 2.1, -2.2], [10.6, 2.0, -1.9], [10.8, 1.95, -1.6]] },

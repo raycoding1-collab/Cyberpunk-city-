@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { drawCanvas } from '../core/textures.js';
 import { M, glow } from '../core/materials.js';
-import { U, roundRectShape } from '../core/utils.js';
+import { U, roundRectShape, T } from '../core/utils.js';
 
 /* =================================================================== */
 /*  Sign painting: light boxes, blade signs, marquee chaser bulbs.     */
@@ -115,3 +115,19 @@ export function rr(x, X, Y, W, H, R) {
 }
 
 export { glow, roundRectShape };
+
+/* --------------------- projecting vertical shop sign --------------------- */
+const SIGN_SET = [['スナック', '#2a0838', '#ff9ae8'], ['歯科医院', '#f4f1ea', '#1a4a8a'], ['麻雀', '#0a3a1a', '#9affb0'], ['カラオケ', '#141414', '#ffd400'],
+  ['整体院', '#f4f1ea', '#c8321e'], ['ＢＡＲ', '#101018', '#4af3ff'], ['質屋', '#3a0a0a', '#ffd6a0'], ['占い', '#2a1040', '#e0b0ff'], ['居酒屋', '#7a1010', '#fff2d0'], ['理容', '#f4f1ea', '#203a8a'],
+  ['英会話', '#f4f1ea', '#1a7a4a'], ['不動産', '#103a6a', '#ffffff'], ['焼肉', '#1a0a06', '#ff8a3a'], ['ネイル', '#ffe6f2', '#c8327a']];
+export function projectingSign(root, F, u, v, r) {
+  const [text, bg, fg] = r.pick(SIGN_SET);
+  const n = [...text].length;
+  const sb = lightBox({ w: 0.72, h: 0.55 + n * 0.62, d: 0.24, px: 110, intensity: r.range(1.0, 1.5), bracket: 0.3, painter: (x, w, h) => {
+    x.fillStyle = bg; x.fillRect(0, 0, w, h); x.strokeStyle = fg; x.lineWidth = 5; x.strokeRect(7, 7, w - 14, h - 14);
+    vtext(x, text, w / 2, 66, 68, `bold 58px ${JPM}`, fg);
+  } });
+  sb.applyMatrix4(F.m(u, v, 0.02).multiply(T(0, 0, 0, 0, -Math.PI / 2, 0)));
+  root.add(sb);
+  return sb;
+}

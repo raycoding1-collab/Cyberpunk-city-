@@ -18,22 +18,59 @@ export function carPaint(hex) {
 
 /** Compact parked car (wheel-based, for the parking racks). Origin at floor, faces +X. */
 export function parkedCar(hex, kind = 0) {
+  // kind 0: compact sedan · 1: kei wagon · 2: van — lofted bodies with glasshouse, arches, lights, plates
+  const key = 'car' + hex + '_' + kind;
+  if (CAR_CACHE.has(key)) return CAR_CACHE.get(key);
   const p = new Prefab('car');
-  const body = carPaint(hex);
-  const glass = new THREE.MeshStandardMaterial({ color: 0x05070a, roughness: 0.05, metalness: 0.4 });
-  const L = kind === 1 ? 3.4 : 4.3, Wd = 1.7, H = kind === 1 ? 0.75 : 0.62;
-  p.add(new RoundedBoxGeometry(L, H, Wd, 3, 0.16), body, T(0, 0.28 + H / 2, 0));
-  const cl = kind === 1 ? 2.4 : 2.2, ch = kind === 1 ? 0.75 : 0.5;
-  p.add(new RoundedBoxGeometry(cl, ch, Wd - 0.12, 3, 0.18), body, T(kind === 1 ? -0.2 : -0.25, 0.28 + H + ch / 2 - 0.05, 0));
-  p.add(new RoundedBoxGeometry(cl - 0.1, ch - 0.12, Wd - 0.06, 2, 0.12), glass, T(kind === 1 ? -0.2 : -0.25, 0.28 + H + ch / 2 - 0.04, 0));
-  for (const x of [-L / 2 + 0.7, L / 2 - 0.7]) for (const z of [-Wd / 2 + 0.05, Wd / 2 - 0.05]) {
-    p.add(new THREE.CylinderGeometry(0.31, 0.31, 0.2, 18), M.rubber, T(x, 0.31, z, Math.PI / 2, 0, 0));
-    p.add(new THREE.CylinderGeometry(0.2, 0.2, 0.21, 12), M.chrome, T(x, 0.31, z, Math.PI / 2, 0, 0));
+  const paint = carPaint(hex);
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0x06080c, roughness: 0.04, metalness: 0.3, clearcoat: 1 });
+  glass.userData.noWeather = true;
+  const trim = new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.5, metalness: 0.3 });
+  const spec = [
+    { L: 4.4, W: keys([[-2.2, 0.66], [-2.05, 0.82], [-1.5, 0.85], [1.4, 0.85], [1.95, 0.8], [2.2, 0.6]]), YB: keys([[-2.2, 0.36], [-1.9, 0.22], [1.8, 0.22], [2.2, 0.32]]),
+      YT: keys([[-2.2, 0.6], [-2.05, 0.9], [-1.5, 0.96], [-1.2, 0.94], [1.0, 0.91], [1.8, 0.82], [2.2, 0.64]]),
+      g: [-1.3, 1.0], GW: keys([[-1.3, 0.68], [-0.8, 0.75], [0.5, 0.75], [1.0, 0.7]]), GT: keys([[-1.3, 0.96], [-0.75, 1.36], [0.25, 1.4], [0.6, 1.33], [1.0, 0.93]]) },
+    { L: 3.4, W: keys([[-1.7, 0.66], [-1.6, 0.74], [1.4, 0.74], [1.7, 0.66]]), YB: keys([[-1.7, 0.34], [-1.5, 0.22], [1.45, 0.22], [1.7, 0.34]]),
+      YT: keys([[-1.7, 0.82], [-1.6, 0.98], [1.0, 0.98], [1.45, 0.9], [1.7, 0.7]]),
+      g: [-1.6, 1.05], GW: keys([[-1.6, 0.7], [-1.4, 0.72], [0.8, 0.72], [1.05, 0.7]]), GT: keys([[-1.6, 1.62], [-1.4, 1.68], [0.6, 1.66], [1.05, 1.0]]) },
+    { L: 4.7, W: keys([[-2.35, 0.8], [-2.25, 0.86], [2.0, 0.86], [2.35, 0.76]]), YB: keys([[-2.35, 0.36], [-2.1, 0.24], [2.0, 0.24], [2.35, 0.34]]),
+      YT: keys([[-2.35, 0.95], [-2.25, 1.05], [1.5, 1.05], [2.05, 0.95], [2.35, 0.78]]),
+      g: [-2.3, 1.55], GW: keys([[-2.3, 0.82], [1.3, 0.82], [1.55, 0.78]]), GT: keys([[-2.3, 1.95], [-2.2, 2.0], [1.1, 1.98], [1.55, 1.08]]) },
+  ][kind];
+  const { L, W, YB, YT, GW, GT } = spec;
+  p.add(loftGeo(48, 32, -L / 2, L / 2, (xx) => ({ w: W(xx), yb: YB(xx), yt: YT(xx), nt: 3.6, nb: 7 })), paint);
+  const gb = (xx) => YT(xx) - 0.02;
+  p.add(loftGeo(28, 24, spec.g[0], spec.g[1], (xx) => ({ w: GW(xx), yb: gb(xx), yt: GT(xx), nt: 3.4, nb: 8 }), 0, Math.PI), glass);
+  // painted roof skin + pillars over the glass
+  const rp = (xx) => ({ w: GW(xx) + 0.006, yb: gb(xx), yt: GT(xx) + 0.006, nt: 3.4, nb: 8 });
+  const g0 = spec.g[0], g1 = spec.g[1], span = g1 - g0;
+  p.add(loftGeo(20, 10, g0 + span * 0.22, g1 - span * 0.2, rp, Math.PI * 0.3, Math.PI * 0.7), paint);
+  for (const px of [g0 + span * 0.12, g0 + span * 0.55, g1 - span * 0.06]) for (const side of [0, Math.PI * 0.72]) p.add(loftGeo(3, 6, px - 0.05, px + 0.05, rp, side + 0.02, side + Math.PI * 0.28), paint);
+  // wheels in dark arches
+  const wx = L / 2 - (kind === 1 ? 0.55 : 0.78);
+  for (const x of [-wx, wx]) for (const sz of [-1, 1]) {
+    const z = sz * (W(x) - 0.06);
+    p.add(new THREE.CylinderGeometry(0.36, 0.36, 0.06, 20), trim, T(x, 0.31, z + sz * 0.005, Math.PI / 2, 0, 0));
+    p.add(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 22), M.rubber, T(x, 0.3, z - sz * 0.06, Math.PI / 2, 0, 0));
+    p.add(new THREE.CylinderGeometry(0.19, 0.19, 0.21, 16), M.chrome, T(x, 0.3, z - sz * 0.06, Math.PI / 2, 0, 0));
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.035, 0.17, 0.02), trim, T(x, 0.3, z + sz * 0.045, 0, 0, (k / 5) * Math.PI * 2).multiply(T(0, 0.08, 0)));
   }
-  p.add(new THREE.BoxGeometry(0.04, 0.08, Wd * 0.8), glow(0xff1020, 1.2), T(-L / 2 - 0.01, 0.28 + H * 0.7, 0));
-  p.add(new THREE.BoxGeometry(0.04, 0.06, Wd * 0.7), glow(0xdfefff, 0.6), T(L / 2 + 0.01, 0.28 + H * 0.65, 0));
+  // lamps, grille, plates, mirrors, door handles
+  const fx = L / 2, yl = YT(fx - 0.15) - 0.1;
+  for (const sz of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.06, 0.09, 0.26), glow(0xeef4ff, 0.7), T(fx - 0.06, yl, sz * (W(fx - 0.1) - 0.2)));
+    p.add(new THREE.BoxGeometry(0.06, 0.1, 0.22), glow(0xff1424, 1.4), T(-fx + 0.06, YT(-fx + 0.15) - 0.12, sz * (W(-fx + 0.1) - 0.18)));
+    p.add(new THREE.BoxGeometry(0.16, 0.09, 0.05), paint, T(spec.g[0] + span * 0.92, gb(g1) + 0.06, sz * (W(g1) + 0.06)));
+    p.add(new THREE.BoxGeometry(0.14, 0.02, 0.02), trim, T(0.2, YT(0.2) - 0.12, sz * (W(0.2) + 0.005)));
+  }
+  p.add(new THREE.BoxGeometry(0.05, 0.12, Math.max(0.5, W(fx - 0.1) * 0.8)), trim, T(fx - 0.03, yl - 0.08, 0));
+  const plate = new THREE.MeshStandardMaterial({ color: kind === 1 ? 0xf4e04a : 0xf2f2ee, roughness: 0.4 });
+  p.add(new THREE.BoxGeometry(0.02, 0.17, 0.33), plate, T(fx + 0.005, YB(fx - 0.05) + 0.16, 0));
+  p.add(new THREE.BoxGeometry(0.02, 0.17, 0.33), plate, T(-fx - 0.005, YB(-fx + 0.05) + 0.2, 0));
+  CAR_CACHE.set(key, p);
   return p;
 }
+const CAR_CACHE = new Map();
 
 /* ------------------------- lofted body surfaces ------------------------- */
 // Superellipse cross-sections swept along X: a continuous, curved, automotive skin.
